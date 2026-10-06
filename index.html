@@ -1444,6 +1444,18 @@ body{
   line-height:1;
 }
 #stickyBannerClose:hover{filter:brightness(1.15)}
+
+/* ══════════ SAFETY RULES — nav kabhi auth par na dikhe ══════════ */
+body:not(.is-logged-in) .nav,
+body:not(.is-logged-in) .music-btn,
+body:not(.is-logged-in) #backToTop,
+body:not(.is-logged-in) #stickyBannerWrap,
+body:not(.is-logged-in) .app-header {
+  display: none !important;
+}
+body:not(.is-logged-in) #mainApp {
+  display: none !important;
+}
 </style>
 
 <!-- ══════════ SERVICE WORKER FOR MONETAG ══════════ -->
@@ -1529,19 +1541,40 @@ body{
   <h1>Info Token</h1>
   <p class="sub">Quiz • Mine • Play • Earn Worldwide</p>
   <div class="card" style="width:100%;max-width:400px">
-    <div class="auth-tabs">
-      <button id="tabLogin" class="active">Login</button>
-      <button id="tabSignup">Sign Up</button>
+  <div class="auth-tabs">
+    <button id="tabLogin" class="active">Login</button>
+    <button id="tabSignup">Sign Up</button>
+  </div>
+  <form id="authForm">
+    <div class="field" id="usernameField" style="display:none">
+      <label>Username</label>
+      <input id="inpUsername" placeholder="your_username" autocomplete="username" />
     </div>
-    <form id="authForm">
-      <div class="field" id="usernameField" style="display:none">
-        <label>Username</label>
-        <input id="inpUsername" placeholder="your_username" autocomplete="username" />
-      </div>
-      <div class="field"><label>Email</label><input id="inpEmail" type="email" placeholder="you@example.com" required autocomplete="email" /></div>
-      <div class="field"><label>Password</label><input id="inpPassword" type="password" placeholder="••••••••" required minlength="6" autocomplete="current-password" /></div>
-      <button class="btn full" type="submit" id="authBtn">Login</button>
-    </form>
+    <div class="field"><label>Email</label><input id="inpEmail" type="email" placeholder="you@example.com" required autocomplete="email" /></div>
+    <div class="field">
+      <label>Password</label>
+      <input id="inpPassword" type="password" placeholder="••••••••" required minlength="6" autocomplete="current-password" />
+      <a href="javascript:void(0)" onclick="showForgotPassword()" id="forgotPwdLink" style="font-size:11px;color:var(--accent);text-align:right;display:block;margin-top:4px;font-weight:700;text-decoration:none">Forgot password?</a>
+    </div>
+    <button class="btn full" type="submit" id="authBtn">Login</button>
+  </form>
+
+  <div style="display:flex;align-items:center;gap:10px;margin:18px 0 12px">
+    <div style="flex:1;height:1px;background:var(--border2)"></div>
+    <span style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1px">OR CONTINUE WITH</span>
+    <div style="flex:1;height:1px;background:var(--border2)"></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <button type="button" onclick="socialLogin('google')" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:11px;background:#ffffff;color:#1f2937;border:1px solid #d1d5db;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s">
+      <svg width="17" height="17" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 5.3 29.3 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21c10.5 0 20-7.6 20-21 0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 5.3 29.3 3 24 3c-7.6 0-14.3 4.3-17.7 10.7z"/><path fill="#4CAF50" d="M24 45c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.5-4.6 2.4-7.2 2.4-5.3 0-9.7-2.6-11.3-7.1l-6.5 5C9.4 40.7 16.2 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.6l6.2 5.2C40.9 35.9 44 30.4 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
+      Google
+    </button>
+    <button type="button" onclick="socialLogin('facebook')" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:11px;background:#1877f2;color:#fff;border:1px solid #1877f2;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0022 12z"/></svg>
+      Facebook
+    </button>
+  </div>
   </div>
 </div>
 
@@ -1700,10 +1733,8 @@ body{
     <div class="li-body">
       <div class="li-title">Question Lock Active</div>
       <div class="li-sub">Played questions get locked for <b>15 days</b>. They unlock automatically at <b>00:00 UTC</b> on the release day.</div>
-    </div>
-  </div>
-</div>
       </div>
+</div>
 
       <div id="quizPlay" class="card hidden">
         <div class="quiz-top">
@@ -2274,8 +2305,6 @@ body{
     </div>
     <div class="um-methods" id="umMethods"></div>
     <button class="um-close" onclick="closeUnlockModal()">Cancel</button>
-  </div>
-</div>
   </div>
 </div>
 
@@ -15585,12 +15614,88 @@ function onLanguageChange(lang){
 let authMode='login';
 $('#tabLogin').onclick=()=>switchAuth('login');
 $('#tabSignup').onclick=()=>switchAuth('signup');
+
+/* ✅ Body class — controls nav visibility */
+function setBodyLoggedIn(v){
+  document.body.classList.toggle('is-logged-in', !!v);
+}
+
+/* ✅ Forgot Password */
+function showForgotPassword(){
+  const email = (document.getElementById('inpEmail').value || '').trim();
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.innerHTML = `
+    <div class="modal" style="text-align:left;max-width:400px">
+      <div class="em" style="text-align:center">🔑</div>
+      <h3 style="text-align:center">Reset Password</h3>
+      <p style="text-align:center">Enter your account email and we'll send a reset link.</p>
+      <div class="field">
+        <label>Email Address</label>
+        <input id="fpEmail" type="email" placeholder="you@example.com" value="${email.replace(/"/g,'&quot;')}" />
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" id="fpCancel">Cancel</button>
+        <button class="btn success" id="fpSend">Send Link</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  const close = ()=> back.remove();
+  back.querySelector('#fpCancel').onclick = close;
+  back.onclick = (e)=>{ if(e.target===back) close(); };
+  back.querySelector('#fpSend').onclick = ()=>{
+    const v = back.querySelector('#fpEmail').value.trim();
+    if(!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){
+      return toast('Please enter a valid email', 'error');
+    }
+    close();
+    showNotice({
+      icon:'📧', title:'Reset Link Sent', type:'success',
+      message:`If an account exists for <b>${v}</b>, a password reset link has been sent. Check your inbox and spam folder.`
+    });
+  };
+  setTimeout(()=> back.querySelector('#fpEmail').focus(), 100);
+}
+
+/* ✅ Social Login */
+function socialLogin(provider){
+  const providerName = provider === 'google' ? 'Google' : 'Facebook';
+  const providerIcon = provider === 'google' ? '🔵' : '📘';
+  showConfirmDialog({
+    icon: providerIcon,
+    iconType: 'info',
+    title: `Continue with ${providerName}?`,
+    message: `Sign in using your <b>${providerName}</b> account.<br><br><span style="font-size:11px;color:var(--dim)">Demo mode — no real authentication is performed.</span>`,
+    confirmText: `Continue with ${providerName}`,
+    cancelText: 'Cancel',
+    confirmClass: '',
+    onConfirm: ()=>{
+      const providerEmail = provider === 'google' ? 'user@gmail.com' : 'user@facebook.com';
+      const uname = provider === 'google' ? 'Google User' : 'Facebook User';
+      state.loggedIn = true;
+      state.user = { email: providerEmail, username: uname, id: 'u_' + Math.random().toString(36).slice(2,10), provider };
+      if(!state.referralCode){
+        state.referralCode = 'INFOTOKEN-' + Math.random().toString(36).slice(2,10).toUpperCase();
+      }
+      if(state.wallet.tokens===0 && state.wallet.points===0){
+        state.wallet.points += 100;
+        state.wallet.lifetimePointsEarned = (state.wallet.lifetimePointsEarned||0) + 100;
+        addPointsActivity(`Welcome bonus (${providerName})`, 100, '+');
+      }
+      save();
+      bootApp();
+      showNotice({ icon:'✅', title:`Signed in with ${providerName}`, message:`Welcome, <b>${uname}</b>!`, type:'success' });
+    }
+  });
+}
 function switchAuth(m){
   authMode=m;
   $('#tabLogin').classList.toggle('active',m==='login');
   $('#tabSignup').classList.toggle('active',m==='signup');
   $('#usernameField').style.display=m==='signup'?'flex':'none';
   $('#authBtn').textContent=m==='login'?'Login':'Create Account';
+  const fpLink = document.getElementById('forgotPwdLink');
+  if(fpLink) fpLink.style.display = (m==='login') ? 'block' : 'none';
 }
 $('#authForm').onsubmit=(e)=>{
   e.preventDefault();
@@ -15619,6 +15724,7 @@ let currentScreen='home';
 const TITLES={ home:'home', quiz:'quiz', mining:'mining', features:'games', wallet:'wallet', daily:'daily', profile:'profile', settings:'settings', contact:'contact', about:'about', privacy:'privacy', terms:'terms', disclaimer:'disclaimer', referral:'refer', 'activity-points':'Points Activity', 'activity-tokens':'Tokens Activity', allgames:'🎮 All Mini Games' };
 
 function bootApp(){
+  setBodyLoggedIn(true);
   $('#authScreen').classList.add('hidden');
   $('#mainApp').classList.remove('hidden');
   applyTheme();
@@ -15715,10 +15821,14 @@ function logout(){
     cancelText:'Stay',
     confirmClass:'danger',
     onConfirm:()=>{
-      state.loggedIn=false;
-      save();
-      location.reload();
-    }
+  state.loggedIn = false;
+  save();
+  setBodyLoggedIn(false);
+  $('#mainApp').classList.add('hidden');
+  $('#authScreen').classList.remove('hidden');
+  switchAuth('login');
+  toast('Logged out', 'info');
+}
   });
 }
 
@@ -17718,13 +17828,14 @@ function bootAfterSplash(){
   try{
     console.log('🚀 Booting app...');
     if(state.loggedIn && state.user){
-      bootApp();
-      setTimeout(()=>{ try{ detectLanguageByGeo(); }catch(e){} }, 1500);
-    } else {
-      const auth = document.getElementById('authScreen');
-      if(auth) auth.classList.remove('hidden');
-      if(typeof switchAuth === 'function') switchAuth('login');
-    }
+  bootApp();
+  setTimeout(()=>{ try{ detectLanguageByGeo(); }catch(e){} }, 1500);
+} else {
+  setBodyLoggedIn(false);
+  const auth = document.getElementById('authScreen');
+  if(auth) auth.classList.remove('hidden');
+  if(typeof switchAuth === 'function') switchAuth('login');
+}
     try{ onWithdrawMethodChange(); }catch(e){}
     try{ setWithdrawSource('INFO_TOKEN'); }catch(e){}
     try{ buildDailyGrid(); }catch(e){}
