@@ -1729,14 +1729,15 @@ body:not(.is-logged-in) #mainApp {
     ⚠️ More than 5 wrong = no reward
   </p>
   <div class="lock-info-panel">
-    <div class="li-ic">🔒</div>
-    <div class="li-body">
-      <div class="li-title">Question Lock Active</div>
-      <div class="li-sub">Played questions get locked for <b>15 days</b>. They unlock automatically at <b>00:00 UTC</b> on the release day.</div>
-      </div>
+  <div class="li-ic">🔒</div>
+  <div class="li-body">
+    <div class="li-title">Question Lock Active</div>
+    <div class="li-sub">Played questions get locked for <b>15 days</b>. They unlock automatically at <b>00:00 UTC</b> on the release day.</div>
+  </div>
+</div>
 </div>
 
-      <div id="quizPlay" class="card hidden">
+    <div id="quizPlay" class="card hidden">
         <div class="quiz-top">
           <div class="quiz-progress"><div id="quizBar" style="width:0%"></div></div>
           <div class="timer" id="quizTimer"><span id="timerText">15</span></div>
@@ -2806,27 +2807,7 @@ function _openAdOverlay(onComplete, durationSec) {
     adActivityDetected = true;
     console.log('[Ad] ✅ Ad activity detected — user clicked');
 
-    // Disable click layer so subsequent clicks reach the iframe
     clickLayer.classList.add('captured');
-
-    // Remove the pulsing hint
-    const hint = clickLayer.querySelector('.itAdClickHint');
-    if (hint) hint.remove();
-
-    // Show confirmation badge
-    const badge = document.createElement('div');
-    badge.id = 'itAdActivityBadge';
-    badge.innerHTML = `<span class="emoji">✅</span> Ad engagement confirmed`;
-    frameWrap.appendChild(badge);
-    setTimeout(() => { if (badge.parentNode) badge.remove(); }, 2000);
-
-    // Update header text
-    if (statusEl) {
-      statusEl.innerHTML = `
-        <span style="color:#10b981;font-weight:800;">✓ Reward unlocked</span>
-        <span style="color:#cbd5e1;font-size:13px;"> · Keep watching <span id="itAdTimer2" style="color:#22d3ee;font-family:monospace;font-weight:900;">${Math.max(0, remaining)}</span>s</span>
-      `;
-    }
   };
 
   // Attach click/tap listeners to the layer (once)
