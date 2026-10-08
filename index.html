@@ -20937,220 +20937,514 @@ showInterstitial(){
 <script src="https://pl31666409.profitableratecpmnetwork.com/26/a5/24/26a5248746ae57777aae0154a0238e98.js"></script>
 <script src="https://js.onclckmn.com/static/onclicka.js"></script>
 <script>
-/* ══════════════════════════════════════════════════════════════
-   🖼️ EXTERNAL LINK → IFRAME MODAL
-   Social Bar, Banner Ads, aur koi bhi external link click
-   app ke andar hi iframe mein khulega — external browser NAHI khulega
-   ══════════════════════════════════════════════════════════════ */
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   🖼️ EXTERNAL LINK → IFRAME MODAL SYSTEM  v2.0
+   ──────────────────────────────────────────────────────────────────
+   Kaam:
+   ✅ Adsterra Social Bar links → iframe modal
+   ✅ Banner ad links → iframe modal
+   ✅ window.open() → iframe modal
+   ✅ Dynamically added links (MutationObserver) → iframe modal
+   ✅ Referral share buttons → external browser (allowed)
+   ✅ Esc key, close button, timer se band ho sakta hai
+   ✅ "Open in Browser" escape option
+   ══════════════════════════════════════════════════════════════════ */
 
 (function(){
-  // ---------- 1. Create iframe modal (hidden by default) ----------
-  function createLinkModal(){
-    if(document.getElementById('extLinkModal')) return;
+  'use strict';
+
+  // ══════════ CONFIG ══════════
+  const CONFIG = {
+    modalId: 'extLinkModal',
+    closeDelayMs: 0,           // 0 = manual close only
+    showTimer: true,           // timer countdown show kare
+    autoCloseAfterSec: 0,      // 0 = never auto close
+    allowedDomains: [          // yeh domains external browser mein khulenge
+      'wa.me', 'whatsapp.com',
+      'facebook.com', 'twitter.com', 'x.com',
+      't.me', 'telegram.org',
+      'mailto:', 'tel:', 'sms:',
+      'google.com/maps', 'maps.google.com'
+    ]
+  };
+
+  // ══════════ HELPERS ══════════
+  const isExternalUrl = (url) => {
+    if (!url) return false;
+    try {
+      const u = new URL(url, location.href);
+      return u.origin !== location.origin &&
+             (u.protocol === 'http:' || u.protocol === 'https:');
+    } catch(e){ return false; }
+  };
+
+  const isAllowedExternal = (url) => {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return CONFIG.allowedDomains.some(d => lower.includes(d));
+  };
+
+  const getHostname = (url) => {
+    try { return new URL(url, location.href).hostname || url; }
+    catch(e){ return url; }
+  };
+
+  // ══════════ BUILD MODAL (once) ══════════
+  function buildModal(){
+    if (document.getElementById(CONFIG.modalId)) return;
+
     const modal = document.createElement('div');
-    modal.id = 'extLinkModal';
-    modal.style.cssText = `
-      position:fixed;inset:0;z-index:2147483646;
-      background:rgba(0,0,0,.92);
-      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-      display:none;align-items:stretch;justify-content:center;
-      padding:0;flex-direction:column;
-      animation:extFade .25s ease;
-    `;
+    modal.id = CONFIG.modalId;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
     modal.innerHTML = `
       <style>
-        @keyframes extFade { from{opacity:0} to{opacity:1} }
-        #extLinkModal.show { display:flex !important; }
-        #extLinkModal .elm-bar {
+        #${CONFIG.modalId}{
+          position:fixed;inset:0;z-index:2147483640;
+          background:rgba(0,0,0,.94);
+          backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+          display:none;flex-direction:column;
+          animation:extModalFade .25s ease;
+          font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+        }
+        #${CONFIG.modalId}.open{display:flex;}
+        @keyframes extModalFade{from{opacity:0}to{opacity:1}}
+
+        #${CONFIG.modalId} .elm-top{
           display:flex;align-items:center;gap:10px;
           padding:12px 14px;
-          background:linear-gradient(135deg,#1a1f37 0%,#0f1420 100%);
+          background:linear-gradient(135deg,#1a1f37,#0f1420);
           border-bottom:1px solid #232b45;
           flex-shrink:0;
           box-shadow:0 4px 20px rgba(0,0,0,.5);
         }
-        #extLinkModal .elm-title {
-          flex:1;min-width:0;
-          color:#f1f5f9;font-size:13px;font-weight:800;
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-          letter-spacing:.2px;
+        #${CONFIG.modalId} .elm-logo{
+          width:36px;height:36px;border-radius:11px;
+          background:linear-gradient(135deg,#6366f1,#22d3ee);
+          display:grid;place-items:center;font-size:17px;
+          flex-shrink:0;
+          box-shadow:0 4px 12px rgba(99,102,241,.5);
         }
-        #extLinkModal .elm-close {
+        #${CONFIG.modalId} .elm-info{
+          flex:1;min-width:0;
+        }
+        #${CONFIG.modalId} .elm-label{
+          font-size:9px;letter-spacing:1.6px;text-transform:uppercase;
+          color:#64748b;font-weight:800;line-height:1;
+        }
+        #${CONFIG.modalId} .elm-title{
+          font-size:13px;font-weight:800;color:#f1f5f9;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+          margin-top:3px;letter-spacing:.2px;
+        }
+        #${CONFIG.modalId} .elm-timer{
+          display:flex;align-items:center;gap:6px;
+          padding:6px 12px;border-radius:999px;
+          background:rgba(34,211,238,.12);
+          border:1px solid rgba(34,211,238,.35);
+          color:#22d3ee;font-size:12px;font-weight:800;
+          font-family:'SF Mono',Monaco,monospace;
+          flex-shrink:0;
+        }
+        #${CONFIG.modalId} .elm-timer .dot{
+          width:7px;height:7px;border-radius:50%;
+          background:#22d3ee;
+          animation:extPulse 1.4s ease-in-out infinite;
+        }
+        @keyframes extPulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+        #${CONFIG.modalId} .elm-actions{
+          display:flex;gap:6px;flex-shrink:0;
+        }
+        #${CONFIG.modalId} .elm-btn{
           width:38px;height:38px;border-radius:11px;
-          background:rgba(239,68,68,.15);
-          border:1px solid rgba(239,68,68,.4);
-          color:#ef4444;font-size:16px;font-weight:900;
-          cursor:pointer;display:grid;place-items:center;
-          flex-shrink:0;transition:all .15s;
+          cursor:pointer;font-size:15px;font-weight:900;
+          display:grid;place-items:center;
+          transition:all .15s;
           -webkit-tap-highlight-color:transparent;
           font-family:inherit;
+          border:1px solid transparent;
         }
-        #extLinkModal .elm-close:hover {
+        #${CONFIG.modalId} .elm-btn:active{transform:scale(.94)}
+        #${CONFIG.modalId} .elm-btn-browser{
+          background:rgba(99,102,241,.15);
+          border-color:rgba(99,102,241,.4);
+          color:#818cf8;
+        }
+        #${CONFIG.modalId} .elm-btn-browser:hover{
+          background:rgba(99,102,241,.3);
+          color:#a5b4fc;
+        }
+        #${CONFIG.modalId} .elm-btn-close{
+          background:rgba(239,68,68,.15);
+          border-color:rgba(239,68,68,.4);
+          color:#ef4444;
+        }
+        #${CONFIG.modalId} .elm-btn-close:hover{
           background:rgba(239,68,68,.3);
-          filter:brightness(1.1);
         }
-        #extLinkModal .elm-close:active { transform:scale(.94); }
-        #extLinkModal .elm-frame {
-          flex:1;width:100%;border:0;background:#fff;
-          display:block;
+
+        #${CONFIG.modalId} .elm-body{
+          flex:1;position:relative;overflow:hidden;
+          background:#0a0e1a;
         }
-        #extLinkModal .elm-loading {
-          position:absolute;top:60px;left:0;right:0;bottom:0;
+        #${CONFIG.modalId} .elm-frame{
+          position:absolute;inset:0;
+          width:100%;height:100%;border:0;
+          background:#fff;opacity:0;
+          transition:opacity .4s ease;
+        }
+        #${CONFIG.modalId} .elm-frame.loaded{opacity:1}
+        #${CONFIG.modalId} .elm-loader{
+          position:absolute;inset:0;
           display:flex;flex-direction:column;
-          align-items:center;justify-content:center;gap:14px;
+          align-items:center;justify-content:center;gap:16px;
           background:radial-gradient(circle at 50% 40%,#151b2e,#0a0e1a 70%);
           color:#94a3b8;font-size:13px;
-          pointer-events:none;transition:opacity .4s ease;
-          z-index:5;
+          transition:opacity .4s ease;
         }
-        #extLinkModal .elm-spinner {
-          width:48px;height:48px;border-radius:50%;
+        #${CONFIG.modalId} .elm-loader.hide{
+          opacity:0;pointer-events:none;
+        }
+        #${CONFIG.modalId} .elm-spin{
+          width:50px;height:50px;border-radius:50%;
           border:3px solid rgba(99,102,241,.15);
           border-top-color:#6366f1;
           border-right-color:#22d3ee;
           animation:extSpin 1s linear infinite;
         }
-        @keyframes extSpin { to { transform:rotate(360deg); } }
+        @keyframes extSpin{to{transform:rotate(360deg)}}
+        #${CONFIG.modalId} .elm-loader-text{
+          font-weight:600;color:#cbd5e1;letter-spacing:.3px;
+        }
+        #${CONFIG.modalId} .elm-loader-sub{
+          font-size:11px;color:#64748b;font-weight:600;
+          display:flex;align-items:center;gap:6px;
+        }
+        #${CONFIG.modalId} .elm-loader-sub .pulse{
+          width:6px;height:6px;border-radius:50%;
+          background:#22d3ee;
+          animation:extPulse 1.5s ease-in-out infinite;
+        }
+
+        /* Bottom hint bar */
+        #${CONFIG.modalId} .elm-bottom{
+          padding:10px 14px;
+          background:#0f1420;
+          border-top:1px solid #232b45;
+          color:#9ca3af;
+          font-size:11px;text-align:center;
+          flex-shrink:0;line-height:1.5;
+        }
+        #${CONFIG.modalId} .elm-bottom b{color:#fbbf24}
       </style>
-      <div class="elm-bar">
-        <div style="width:34px;height:34px;border-radius:10px;
-          background:linear-gradient(135deg,#6366f1,#22d3ee);
-          display:grid;place-items:center;font-size:16px;flex-shrink:0;
-          box-shadow:0 4px 12px rgba(99,102,241,.5);">🌐</div>
-        <div class="elm-title" id="extLinkTitle">Loading...</div>
-        <button class="elm-close" id="extLinkClose" title="Close">✕</button>
+
+      <!-- Top bar -->
+      <div class="elm-top">
+        <div class="elm-logo">🌐</div>
+        <div class="elm-info">
+          <div class="elm-label">Sponsored Link</div>
+          <div class="elm-title" id="elmTitle">Loading...</div>
+        </div>
+        <div class="elm-timer" id="elmTimer" style="display:none">
+          <span class="dot"></span>
+          <span id="elmTimerVal">0s</span>
+        </div>
+        <div class="elm-actions">
+          <button class="elm-btn elm-btn-browser" id="elmOpenBrowser" title="Open in external browser">↗</button>
+          <button class="elm-btn elm-btn-close" id="elmClose" title="Close (Esc)">✕</button>
+        </div>
       </div>
-      <iframe
-        id="extLinkFrame"
-        class="elm-frame"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
-        referrerpolicy="no-referrer-when-downgrade"
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-        scrolling="yes">
-      </iframe>
-      <div class="elm-loading" id="extLinkLoading">
-        <div class="elm-spinner"></div>
-        <div style="font-weight:600;color:#cbd5e1;">Opening sponsored content</div>
+
+      <!-- Body -->
+      <div class="elm-body">
+        <iframe
+          id="elmFrame"
+          class="elm-frame"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-modals allow-orientation-lock allow-pointer-lock allow-top-navigation-by-user-activation"
+          referrerpolicy="no-referrer-when-downgrade"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen; geolocation"
+          scrolling="yes"
+          loading="eager">
+        </iframe>
+        <div class="elm-loader" id="elmLoader">
+          <div class="elm-spin"></div>
+          <div class="elm-loader-text">Opening content</div>
+          <div class="elm-loader-sub">
+            <span class="pulse"></span>
+            <span>Please wait</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom hint -->
+      <div class="elm-bottom">
+        💡 Yeh content app ke andar khul raha hai. Band karne ke liye <b>✕</b> dabayein ya <b>Esc</b> key use karein.
       </div>
     `;
+
     document.body.appendChild(modal);
 
-    const closeBtn = document.getElementById('extLinkClose');
-    closeBtn.onclick = closeExtLinkModal;
+    // Element refs
+    const closeBtn = modal.querySelector('#elmClose');
+    const browserBtn = modal.querySelector('#elmOpenBrowser');
+    const frame = modal.querySelector('#elmFrame');
+    const loader = modal.querySelector('#elmLoader');
+    const titleEl = modal.querySelector('#elmTitle');
+    const timerWrap = modal.querySelector('#elmTimer');
+    const timerVal = modal.querySelector('#elmTimerVal');
 
-    // Close on ESC
-    document.addEventListener('keydown', (e)=>{
-      if(e.key === 'Escape') closeExtLinkModal();
+    let currentUrl = '';
+    let timerHandle = null;
+
+    // ══════════ IFRAME LOAD ══════════
+    frame.addEventListener('load', () => {
+      try {
+        // some browsers fire load for about:blank also
+        if (frame.src && frame.src !== 'about:blank') {
+          frame.classList.add('loaded');
+          loader.classList.add('hide');
+          setTimeout(()=>{ try { loader.style.display = 'none'; } catch(e){} }, 450);
+        }
+      } catch(e){}
     });
 
-    // Reveal iframe on load
-    const frame = document.getElementById('extLinkFrame');
-    frame.addEventListener('load', () => {
-      const loading = document.getElementById('extLinkLoading');
-      if(loading){
-        loading.style.opacity = '0';
-        setTimeout(()=>{ try { loading.style.display = 'none'; } catch(e){} }, 400);
+    // Safety fallback — reveal iframe after 4s no matter what
+    setTimeout(() => {
+      if (modal.classList.contains('open') && !frame.classList.contains('loaded')) {
+        frame.classList.add('loaded');
+        loader.classList.add('hide');
+      }
+    }, 4000);
+
+    // ══════════ CLOSE ══════════
+    const closeModal = () => {
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+      modal.classList.remove('open');
+      document.body.style.overflow = '';
+      setTimeout(() => {
+        try { frame.src = 'about:blank'; } catch(e){}
+        frame.classList.remove('loaded');
+        loader.classList.remove('hide');
+        try { loader.style.display = 'flex'; } catch(e){}
+      }, 350);
+      console.log('[ExtLink] Closed');
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+
+    // ══════════ OPEN IN BROWSER (escape hatch) ══════════
+    browserBtn.addEventListener('click', () => {
+      if (!currentUrl) return;
+      window.__allowRealOpen = true;
+      try { window.open(currentUrl, '_blank'); } catch(e){}
+      setTimeout(()=>{ window.__allowRealOpen = false; }, 800);
+    });
+
+    // ══════════ ESC KEY ══════════
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('open')) {
+        closeModal();
       }
     });
+
+    // ══════════ EXPOSE API ══════════
+    window.__extLinkModal = {
+      open: (url) => {
+        if (!url) return;
+        currentUrl = url;
+
+        // Update title
+        titleEl.textContent = getHostname(url);
+
+        // Reset frame
+        frame.classList.remove('loaded');
+        loader.style.display = 'flex';
+        loader.classList.remove('hide');
+
+        // Load URL
+        try { frame.src = url; } catch(e){
+          try { frame.src = 'about:blank'; } catch(e2){}
+        }
+
+        // Show modal
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+
+        // Timer (optional)
+        if (CONFIG.showTimer && CONFIG.autoCloseAfterSec > 0) {
+          timerWrap.style.display = 'flex';
+          let remaining = CONFIG.autoCloseAfterSec;
+          timerVal.textContent = remaining + 's';
+          if (timerHandle) clearInterval(timerHandle);
+          timerHandle = setInterval(() => {
+            remaining--;
+            timerVal.textContent = Math.max(0, remaining) + 's';
+            if (remaining <= 0) {
+              clearInterval(timerHandle);
+              timerHandle = null;
+              closeModal();
+            }
+          }, 1000);
+        } else if (CONFIG.showTimer) {
+          // Just show a static "app" indicator
+          timerWrap.style.display = 'flex';
+          timerVal.textContent = 'In-App';
+        }
+
+        console.log('[ExtLink] Opened:', url);
+      },
+      close: closeModal
+    };
   }
 
-  function openExtLinkModal(url){
-    if(!url || typeof url !== 'string') return;
-    createLinkModal();
-    const modal = document.getElementById('extLinkModal');
-    const frame = document.getElementById('extLinkFrame');
-    const titleEl = document.getElementById('extLinkTitle');
-    const loading = document.getElementById('extLinkLoading');
+  // ══════════ OPEN HELPER ══════════
+  function openInModal(url){
+    if (!url || typeof url !== 'string') return false;
 
-    // Reset loading
-    if(loading){ loading.style.display = 'flex'; loading.style.opacity = '1'; }
-
-    // Title
-    try {
-      const u = new URL(url, location.href);
-      titleEl.textContent = u.hostname || url;
-    } catch(e){
-      titleEl.textContent = url;
+    // Allowlist — external browser ke liye (WhatsApp share etc.)
+    if (isAllowedExternal(url)) {
+      console.log('[ExtLink] Allowed external:', url);
+      return false; // caller will use window.open
     }
 
-    frame.src = url;
-    modal.classList.add('show');
-    document.body.style.overflow = 'hidden';
+    if (!isExternalUrl(url)) return false;
 
-    console.log('[ExtLink] Opened in iframe:', url);
+    buildModal();
+    if (window.__extLinkModal && window.__extLinkModal.open) {
+      window.__extLinkModal.open(url);
+      return true;
+    }
+    return false;
   }
 
-  function closeExtLinkModal(){
-    const modal = document.getElementById('extLinkModal');
-    if(!modal) return;
-    modal.classList.remove('show');
-    document.body.style.overflow = '';
-    // Clear iframe to stop any media
-    setTimeout(() => {
-      const frame = document.getElementById('extLinkFrame');
-      if(frame) frame.src = 'about:blank';
-    }, 300);
-    console.log('[ExtLink] Closed');
-  }
-
-  // Expose globally
-  window.openExtLinkModal = openExtLinkModal;
-  window.closeExtLinkModal = closeExtLinkModal;
-
-  // ---------- 2. Click interceptor for <a> tags ----------
+  // ══════════ 1. INTERCEPT <a> CLICKS (Parent Document) ══════════
   document.addEventListener('click', function(e){
     // Skip if our ad overlay is active
-    if(document.getElementById('itAdOverlay')) return;
+    if (document.getElementById('itAdOverlay')) return;
+
+    // Skip if inside our own modal (iframes handle their own)
+    if (e.target.closest && e.target.closest('#' + CONFIG.modalId)) return;
 
     const a = e.target.closest && e.target.closest('a');
-    if(!a) return;
+    if (!a) return;
 
     const href = a.getAttribute('href');
-    if(!href) return;
-    if(href.startsWith('#') || href.startsWith('javascript:')) return;
-    if(href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('sms:')) return;
+    if (!href) return;
+    if (href.startsWith('#') || href.startsWith('javascript:')) return;
+    if (href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('sms:')) {
+      return; // allow these
+    }
 
-    // Allow internal same-origin
+    // Same-origin? allow
     let url;
-    try {
-      url = new URL(href, location.href);
-    } catch(err){ return; }
+    try { url = new URL(href, location.href); }
+    catch(err){ return; }
 
-    if(url.origin === location.origin) return;
+    if (url.origin === location.origin) return;
 
-    // External link → intercept
-    e.preventDefault();
-    e.stopPropagation();
-    openExtLinkModal(url.href);
-  }, true);
+    // External — intercept
+    if (openInModal(url.href)) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+  }, true); // ✅ capture phase — runs before any other handler
 
-  // ---------- 3. window.open interceptor ----------
+  // ══════════ 2. INTERCEPT window.open ══════════
   const _origWindowOpen = window.open.bind(window);
   window.__allowRealOpen = false;
 
   window.open = function(url, target, features){
-    // Allow if explicitly flagged (e.g. share buttons)
-    if(window.__allowRealOpen){
+    // Explicit allow (referral share buttons etc.)
+    if (window.__allowRealOpen) {
       return _origWindowOpen(url, target, features);
     }
 
-    if(url && typeof url === 'string' && /^https?:/i.test(url)){
-      try {
-        const u = new URL(url, location.href);
-        if(u.origin !== location.origin){
-          // External → iframe
-          openExtLinkModal(u.href);
-          return null;
-        }
-      } catch(e){}
+    if (url && typeof url === 'string' && /^https?:/i.test(url)) {
+      if (openInModal(url)) {
+        return null; // blocked real open
+      }
     }
     return _origWindowOpen(url, target, features);
   };
 
-  console.log('✅ External link iframe interceptor ready');
+  // ══════════ 3. INTERCEPT target="_blank" via mutation ══════════
+  // Adsterra sometimes adds target="_blank" dynamically
+  const fixTargetBlank = (root) => {
+    try {
+      const anchors = (root || document).querySelectorAll('a[target="_blank"]');
+      anchors.forEach(a => {
+        const href = a.getAttribute('href');
+        if (!href) return;
+        if (href.startsWith('#') || href.startsWith('javascript:')) return;
+
+        let url;
+        try { url = new URL(href, location.href); }
+        catch(err){ return; }
+
+        if (url.origin === location.origin) return;
+
+        // Add our own click handler as backup
+        if (!a.__extLinkBound) {
+          a.__extLinkBound = true;
+          a.addEventListener('click', (ev) => {
+            if (openInModal(url.href)) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              ev.stopImmediatePropagation();
+            }
+          }, true);
+        }
+      });
+    } catch(e){}
+  };
+
+  // ══════════ 4. MUTATION OBSERVER — dynamically added links ══════════
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.addedNodes && m.addedNodes.length) {
+        m.addedNodes.forEach(node => {
+          if (node.nodeType === 1) { // element
+            // If it's an anchor itself
+            if (node.tagName === 'A') fixTargetBlank(node.parentNode || document);
+            else fixTargetBlank(node);
+          }
+        });
+      }
+    }
+  });
+
+  // Start observing after DOM ready
+  const startObserver = () => {
+    try {
+      observer.observe(document.body || document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+      // Initial scan
+      fixTargetBlank(document);
+    } catch(e){}
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startObserver);
+  } else {
+    startObserver();
+  }
+
+  // ══════════ 5. EXPOSE GLOBAL HELPERS ══════════
+  window.openExtLinkModal = (url) => openInModal(url);
+  window.closeExtLinkModal = () => {
+    if (window.__extLinkModal) window.__extLinkModal.close();
+  };
+
+  console.log('✅ External link iframe interceptor v2.0 ready');
+
 })();
 
-/* ══════════ Initialize Onclicka (fixed syntax) ══════════ */
+/* ══════════ Onclicka Init (fixed syntax) ══════════ */
 window.addEventListener('load', function() {
   if (typeof window.onclicka !== 'undefined' && typeof window.onclicka.init === 'function') {
     try {
@@ -21166,7 +21460,7 @@ window.addEventListener('load', function() {
   }
 });
 
-/* ══════════ Save state when user clicks anywhere ══════════ */
+/* ══════════ Save state on any external click ══════════ */
 document.addEventListener('click', function(e){
   try {
     const t = e.target;
