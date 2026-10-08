@@ -2533,17 +2533,25 @@ function creditPendingRewardIfReady(showPopup = true) {
   }
 }
 
-/* ══════════ MAIN AD FUNCTION ══════════ */
+/* ══════════════════════════════════════════════════════════════
+   🎬 REWARDED AD PRIORITY CHAIN:
+     1️⃣ AdMob Interstitial (native)  → treated as rewarded
+     2️⃣ Adsterra Smartlink (iframe overlay)
+     3️⃣ Monetag (fallback script)
+     4️⃣ Onclicka (final fallback)
+   ══════════════════════════════════════════════════════════════ */
 function showRewardedAd(onComplete, opts = {}) {
   if (_adInProgress) {
     console.log('[Ad] Already in progress');
     return;
   }
 
+  // ✅ Save state BEFORE any ad activity
+  try { save(); } catch(e){}
+
   const type = (opts.pendingReward && opts.pendingReward.type) || 'general';
   const duration = opts.requiredSeconds || getAdDuration(type);
 
-  // Save pending reward
   if (opts.pendingReward) {
     setPendingReward({ ...opts.pendingReward, requiredSec: duration });
   }
@@ -2555,20 +2563,42 @@ function showRewardedAd(onComplete, opts = {}) {
     }
   };
 
-  // Native AdMob first
+  const fallbackChain = () => {
+    // Priority 2: Adsterra iframe overlay
+    // Priority 3 & 4 are loaded inside overlay via iframe ads
+    console.log('[Ad] Using Adsterra overlay (with Monetag/Onclicka fallbacks)');
+    _openAdOverlay(wrapped, duration);
+  };
+
+  // ══════════ PRIORITY 1: AdMob Interstitial (native only) ══════════
   if (window.AdMobBridge && window.AdMobBridge.available) {
     _adInProgress = true;
-    window.AdMobBridge.showRewarded().then(rewarded => {
-      _adInProgress = false;
-      if (rewarded) wrapped();
-    }).catch(()=>{
-      _adInProgress = false;
-      _openAdOverlay(wrapped, duration);
-    });
+    (async () => {
+      try {
+        console.log('[Ad] Attempting AdMob Interstitial (as rewarded)...');
+        const shown = await window.AdMobBridge.showInterstitial();
+        _adInProgress = false;
+
+        if (shown === true) {
+          console.log('[Ad] ✅ AdMob Interstitial watched → crediting reward');
+          wrapped();
+          return;
+        }
+
+        // Interstitial failed → fallback
+        console.log('[Ad] AdMob Interstitial failed → fallback to Adsterra');
+        fallbackChain();
+      } catch(e) {
+        console.warn('[Ad] AdMob flow error → fallback', e);
+        _adInProgress = false;
+        fallbackChain();
+      }
+    })();
     return;
   }
 
-  _openAdOverlay(wrapped, duration);
+  // ══════════ WEB FALLBACK ══════════
+  fallbackChain();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -17379,7 +17409,13 @@ function shareRef(platform){
     }
     return;
   }
-  if(urls[platform]) window.open(urls[platform], '_blank');
+  if(urls[platform]){
+  try { save(); } catch(e){}
+  // ✅ Allow real external open for share buttons (bypass iframe interceptor)
+  window.__allowRealOpen = true;
+  window.open(urls[platform], '_blank');
+  setTimeout(()=>{ window.__allowRealOpen = false; }, 800);
+}
 }
 
 /* ============================================================
@@ -20767,12 +20803,11 @@ function closeStickyBanner(){
 <script>
 (function(){
   const ADMOB = {
-    APP_ID: 'ca-app-pub-4148027634346310~6910747998',
-    BANNER: 'ca-app-pub-4148027634346310/6158565805',
-    INTERSTITIAL: 'ca-app-pub-4148027634346310/7555407953',
-    REWARDED: 'ca-app-pub-4148027634346310/9989999606',
-    NATIVE_ADV: 'ca-app-pub-4148027634346310/6342312914',
-    INTERSTITIAL_REWARDED: 'ca-app-pub-4148027634346310/9463300271'
+    APP_ID: 'ca-app-pub-4148027634346310~9268601419',
+    BANNER: 'ca-app-pub-4148027634346310/6151483483',
+    INTERSTITIAL: 'ca-app-pub-4148027634346310/6203454378',
+    NATIVE_ADV: 'ca-app-pub-4148027634346310/4975976493',
+    APP OPEN: 'ca-app-pub-4148027634346310/2563592269',
   };
 
   // Detect Capacitor native environment
@@ -20799,14 +20834,57 @@ function closeStickyBanner(){
       if(!this.available) return;
       try{ await AdMobPlugin.hideBanner(); }catch(e){}
     },
-    // Interstitial ad
-    async showInterstitial(){
-      if(!this.available) return console.log('[AdMob] Interstitial (web fallback) — '+ADMOB.INTERSTITIAL);
-      try{
-        await AdMobPlugin.prepareInterstitial({ adId: ADMOB.INTERSTITIAL });
-        await AdMobPlugin.showInterstitial();
-      }catch(e){ console.warn('[AdMob] Interstitial error', e); }
-    },
+    // ✅ Interstitial ad — ACTS AS REWARDED (resolves true when dismissed)
+showInterstitial(){
+  return new Promise(async (resolve) => {
+    if(!this.available){
+      console.log('[AdMob] Interstitial (web fallback) — '+ADMOB.INTERSTITIAL);
+      resolve(false);
+      return;
+    }
+    let done = false;
+    const finish = (v)=>{ if(done) return; done=true; resolve(v); };
+    let dismissL = null, failL = null, loadedL = null;
+
+    const cleanup = () => {
+      try { dismissL && dismissL.remove(); } catch(e){}
+      try { failL && failL.remove(); } catch(e){}
+      try { loadedL && loadedL.remove(); } catch(e){}
+    };
+
+    try {
+      // Listen for dismissal (user watched)
+      dismissL = await AdMobPlugin.addListener('onInterstitialAdDismissed', () => {
+        cleanup();
+        finish(true);  // ✅ Treat as rewarded
+      });
+
+      // Listen for load failure
+      failL = await AdMobPlugin.addListener('onInterstitialAdFailedToLoad', () => {
+        cleanup();
+        finish(false);
+      });
+
+      // Listen for load success (to know if it opened)
+      try {
+        loadedL = await AdMobPlugin.addListener('onInterstitialAdLoaded', () => {
+          console.log('[AdMob] Interstitial loaded');
+        });
+      } catch(e){}
+
+      await AdMobPlugin.prepareInterstitial({ adId: ADMOB.INTERSTITIAL });
+      await AdMobPlugin.showInterstitial();
+
+      // Safety net — if no event fires in 90s
+      setTimeout(()=>finish(true), 90000);
+
+    } catch(e){
+      console.warn('[AdMob] Interstitial error', e);
+      cleanup();
+      finish(false);
+    }
+  });
+},
     // Rewarded ad — returns true if user earned reward
     async showRewarded(){
       if(!this.available){
@@ -20859,21 +20937,245 @@ function closeStickyBanner(){
 <script src="https://pl31666409.profitableratecpmnetwork.com/26/a5/24/26a5248746ae57777aae0154a0238e98.js"></script>
 <script src="https://js.onclckmn.com/static/onclicka.js"></script>
 <script>
-  // Initialize Onclicka WITHOUT auto-binding
-  window.addEventListener('load', function() {
-    if (typeof window.onclicka !== 'undefined' && typeof window.onclicka.init === 'function') {
-      try {
-        window.onclicka.init({
-          admpid: '467200',
-          autoBind: false,     
-          selector:  #onclicka-manual-trigger     
-        });
-        console.log('[Onclicka] Manual mode initialized');
-      } catch(e) {
-        console.warn('[Onclicka] init failed:', e);
+/* ══════════════════════════════════════════════════════════════
+   🖼️ EXTERNAL LINK → IFRAME MODAL
+   Social Bar, Banner Ads, aur koi bhi external link click
+   app ke andar hi iframe mein khulega — external browser NAHI khulega
+   ══════════════════════════════════════════════════════════════ */
+
+(function(){
+  // ---------- 1. Create iframe modal (hidden by default) ----------
+  function createLinkModal(){
+    if(document.getElementById('extLinkModal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'extLinkModal';
+    modal.style.cssText = `
+      position:fixed;inset:0;z-index:2147483646;
+      background:rgba(0,0,0,.92);
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      display:none;align-items:stretch;justify-content:center;
+      padding:0;flex-direction:column;
+      animation:extFade .25s ease;
+    `;
+    modal.innerHTML = `
+      <style>
+        @keyframes extFade { from{opacity:0} to{opacity:1} }
+        #extLinkModal.show { display:flex !important; }
+        #extLinkModal .elm-bar {
+          display:flex;align-items:center;gap:10px;
+          padding:12px 14px;
+          background:linear-gradient(135deg,#1a1f37 0%,#0f1420 100%);
+          border-bottom:1px solid #232b45;
+          flex-shrink:0;
+          box-shadow:0 4px 20px rgba(0,0,0,.5);
+        }
+        #extLinkModal .elm-title {
+          flex:1;min-width:0;
+          color:#f1f5f9;font-size:13px;font-weight:800;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+          letter-spacing:.2px;
+        }
+        #extLinkModal .elm-close {
+          width:38px;height:38px;border-radius:11px;
+          background:rgba(239,68,68,.15);
+          border:1px solid rgba(239,68,68,.4);
+          color:#ef4444;font-size:16px;font-weight:900;
+          cursor:pointer;display:grid;place-items:center;
+          flex-shrink:0;transition:all .15s;
+          -webkit-tap-highlight-color:transparent;
+          font-family:inherit;
+        }
+        #extLinkModal .elm-close:hover {
+          background:rgba(239,68,68,.3);
+          filter:brightness(1.1);
+        }
+        #extLinkModal .elm-close:active { transform:scale(.94); }
+        #extLinkModal .elm-frame {
+          flex:1;width:100%;border:0;background:#fff;
+          display:block;
+        }
+        #extLinkModal .elm-loading {
+          position:absolute;top:60px;left:0;right:0;bottom:0;
+          display:flex;flex-direction:column;
+          align-items:center;justify-content:center;gap:14px;
+          background:radial-gradient(circle at 50% 40%,#151b2e,#0a0e1a 70%);
+          color:#94a3b8;font-size:13px;
+          pointer-events:none;transition:opacity .4s ease;
+          z-index:5;
+        }
+        #extLinkModal .elm-spinner {
+          width:48px;height:48px;border-radius:50%;
+          border:3px solid rgba(99,102,241,.15);
+          border-top-color:#6366f1;
+          border-right-color:#22d3ee;
+          animation:extSpin 1s linear infinite;
+        }
+        @keyframes extSpin { to { transform:rotate(360deg); } }
+      </style>
+      <div class="elm-bar">
+        <div style="width:34px;height:34px;border-radius:10px;
+          background:linear-gradient(135deg,#6366f1,#22d3ee);
+          display:grid;place-items:center;font-size:16px;flex-shrink:0;
+          box-shadow:0 4px 12px rgba(99,102,241,.5);">🌐</div>
+        <div class="elm-title" id="extLinkTitle">Loading...</div>
+        <button class="elm-close" id="extLinkClose" title="Close">✕</button>
+      </div>
+      <iframe
+        id="extLinkFrame"
+        class="elm-frame"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
+        referrerpolicy="no-referrer-when-downgrade"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        scrolling="yes">
+      </iframe>
+      <div class="elm-loading" id="extLinkLoading">
+        <div class="elm-spinner"></div>
+        <div style="font-weight:600;color:#cbd5e1;">Opening sponsored content</div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeBtn = document.getElementById('extLinkClose');
+    closeBtn.onclick = closeExtLinkModal;
+
+    // Close on ESC
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape') closeExtLinkModal();
+    });
+
+    // Reveal iframe on load
+    const frame = document.getElementById('extLinkFrame');
+    frame.addEventListener('load', () => {
+      const loading = document.getElementById('extLinkLoading');
+      if(loading){
+        loading.style.opacity = '0';
+        setTimeout(()=>{ try { loading.style.display = 'none'; } catch(e){} }, 400);
       }
+    });
+  }
+
+  function openExtLinkModal(url){
+    if(!url || typeof url !== 'string') return;
+    createLinkModal();
+    const modal = document.getElementById('extLinkModal');
+    const frame = document.getElementById('extLinkFrame');
+    const titleEl = document.getElementById('extLinkTitle');
+    const loading = document.getElementById('extLinkLoading');
+
+    // Reset loading
+    if(loading){ loading.style.display = 'flex'; loading.style.opacity = '1'; }
+
+    // Title
+    try {
+      const u = new URL(url, location.href);
+      titleEl.textContent = u.hostname || url;
+    } catch(e){
+      titleEl.textContent = url;
     }
-  });
+
+    frame.src = url;
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+
+    console.log('[ExtLink] Opened in iframe:', url);
+  }
+
+  function closeExtLinkModal(){
+    const modal = document.getElementById('extLinkModal');
+    if(!modal) return;
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+    // Clear iframe to stop any media
+    setTimeout(() => {
+      const frame = document.getElementById('extLinkFrame');
+      if(frame) frame.src = 'about:blank';
+    }, 300);
+    console.log('[ExtLink] Closed');
+  }
+
+  // Expose globally
+  window.openExtLinkModal = openExtLinkModal;
+  window.closeExtLinkModal = closeExtLinkModal;
+
+  // ---------- 2. Click interceptor for <a> tags ----------
+  document.addEventListener('click', function(e){
+    // Skip if our ad overlay is active
+    if(document.getElementById('itAdOverlay')) return;
+
+    const a = e.target.closest && e.target.closest('a');
+    if(!a) return;
+
+    const href = a.getAttribute('href');
+    if(!href) return;
+    if(href.startsWith('#') || href.startsWith('javascript:')) return;
+    if(href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('sms:')) return;
+
+    // Allow internal same-origin
+    let url;
+    try {
+      url = new URL(href, location.href);
+    } catch(err){ return; }
+
+    if(url.origin === location.origin) return;
+
+    // External link → intercept
+    e.preventDefault();
+    e.stopPropagation();
+    openExtLinkModal(url.href);
+  }, true);
+
+  // ---------- 3. window.open interceptor ----------
+  const _origWindowOpen = window.open.bind(window);
+  window.__allowRealOpen = false;
+
+  window.open = function(url, target, features){
+    // Allow if explicitly flagged (e.g. share buttons)
+    if(window.__allowRealOpen){
+      return _origWindowOpen(url, target, features);
+    }
+
+    if(url && typeof url === 'string' && /^https?:/i.test(url)){
+      try {
+        const u = new URL(url, location.href);
+        if(u.origin !== location.origin){
+          // External → iframe
+          openExtLinkModal(u.href);
+          return null;
+        }
+      } catch(e){}
+    }
+    return _origWindowOpen(url, target, features);
+  };
+
+  console.log('✅ External link iframe interceptor ready');
+})();
+
+/* ══════════ Initialize Onclicka (fixed syntax) ══════════ */
+window.addEventListener('load', function() {
+  if (typeof window.onclicka !== 'undefined' && typeof window.onclicka.init === 'function') {
+    try {
+      window.onclicka.init({
+        admpid: '467200',
+        autoBind: false,
+        selector: '#onclicka-manual-trigger'
+      });
+      console.log('[Onclicka] Manual mode initialized');
+    } catch(e) {
+      console.warn('[Onclicka] init failed:', e);
+    }
+  }
+});
+
+/* ══════════ Save state when user clicks anywhere ══════════ */
+document.addEventListener('click', function(e){
+  try {
+    const t = e.target;
+    if (!t) return;
+    if (t.tagName === 'A' && t.href && /^https?:/i.test(t.href)) {
+      if (window.persistNow) persistNow('click:external');
+    }
+  } catch(_){}
+}, true);
 </script>
 </body>
 </html>
