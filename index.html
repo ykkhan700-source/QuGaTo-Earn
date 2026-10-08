@@ -2534,11 +2534,13 @@ function creditPendingRewardIfReady(showPopup = true) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   🎬 REWARDED AD PRIORITY CHAIN:
-     1️⃣ AdMob Interstitial (native)  → treated as rewarded
-     2️⃣ Adsterra Smartlink (iframe overlay)
-     3️⃣ Monetag (fallback script)
-     4️⃣ Onclicka (final fallback)
+   🎬 REWARDED AD PRIORITY CHAIN (AdMob Policy Compliant):
+   
+   1️⃣ AdMob Rewarded Video (native)  → proper rewarded ad
+   2️⃣ Adsterra Smartlink (iframe overlay) → web fallback
+   
+   ⚠️ NOTE: AdMob Interstitial is NOT used here.
+   It's only used in goTo() for screen transitions (non-reward).
    ══════════════════════════════════════════════════════════════ */
 function showRewardedAd(onComplete, opts = {}) {
   if (_adInProgress) {
@@ -2563,42 +2565,53 @@ function showRewardedAd(onComplete, opts = {}) {
     }
   };
 
-  const fallbackChain = () => {
-    // Priority 2: Adsterra iframe overlay
-    // Priority 3 & 4 are loaded inside overlay via iframe ads
-    console.log('[Ad] Using Adsterra overlay (with Monetag/Onclicka fallbacks)');
+  const fallbackToOverlay = () => {
+    console.log('[Ad] → Adsterra overlay fallback');
     _openAdOverlay(wrapped, duration);
   };
 
-  // ══════════ PRIORITY 1: AdMob Interstitial (native only) ══════════
+  // ══════════ PRIORITY 1: AdMob REWARDED VIDEO (native only) ══════════
   if (window.AdMobBridge && window.AdMobBridge.available) {
     _adInProgress = true;
     (async () => {
       try {
-        console.log('[Ad] Attempting AdMob Interstitial (as rewarded)...');
-        const shown = await window.AdMobBridge.showInterstitial();
+        console.log('[Ad] Attempting AdMob Rewarded Video...');
+        const rewarded = await window.AdMobBridge.showRewarded();
         _adInProgress = false;
 
-        if (shown === true) {
-          console.log('[Ad] ✅ AdMob Interstitial watched → crediting reward');
+        if (rewarded === true) {
+          console.log('[Ad] ✅ AdMob Rewarded watched → crediting reward');
           wrapped();
           return;
         }
 
-        // Interstitial failed → fallback
-        console.log('[Ad] AdMob Interstitial failed → fallback to Adsterra');
-        fallbackChain();
+        // User closed early OR ad failed to load
+        console.log('[Ad] AdMob Rewarded not completed → fallback');
+        // Clear pending reward since user didn't complete
+        try { clearPendingReward(); } catch(e){}
+        
+        // Show info message
+        try {
+          showNotice({
+            icon: '⚠️',
+            title: 'Ad Not Completed',
+            message: 'Watch the full ad to earn your reward.',
+            type: 'warn',
+            duration: 3000
+          });
+        } catch(e){}
+        
       } catch(e) {
-        console.warn('[Ad] AdMob flow error → fallback', e);
+        console.warn('[Ad] AdMob Rewarded error → fallback', e);
         _adInProgress = false;
-        fallbackChain();
+        fallbackToOverlay();
       }
     })();
     return;
   }
 
   // ══════════ WEB FALLBACK ══════════
-  fallbackChain();
+  fallbackToOverlay();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -15793,11 +15806,13 @@ function goTo(name){
 $('#backBtn').classList.toggle('hidden', name === 'home');
   $$('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.nav===name));
   window.scrollTo({top:0,behavior:'smooth'});
-  // Show interstitial occasionally (every 5th navigation)
+  // ✅ Show interstitial every 5th navigation (NON-REWARDED)
+// This is policy-compliant use of interstitial ads
 if(!window._navCount) window._navCount = 0;
 window._navCount++;
-if(window._navCount % 5 === 0 && window.AdMobBridge){
-  window.AdMobBridge.showInterstitial();
+if(window._navCount % 5 === 0 && window.AdMobBridge && window.AdMobBridge.available){
+  // Fire and forget — don't await, doesn't affect navigation
+  window.AdMobBridge.showInterstitial().catch(()=>{});
 }
   if(name==='mining'){refreshMiningUI(); refreshBoostersUI(); refreshMiningNotifSwitches();}
   if(name==='features'){refreshFeatureStatus();buildGamesGrid();}
@@ -20834,56 +20849,19 @@ function closeStickyBanner(){
       if(!this.available) return;
       try{ await AdMobPlugin.hideBanner(); }catch(e){}
     },
-    // ✅ Interstitial ad — ACTS AS REWARDED (resolves true when dismissed)
-showInterstitial(){
-  return new Promise(async (resolve) => {
-    if(!this.available){
-      console.log('[AdMob] Interstitial (web fallback) — '+ADMOB.INTERSTITIAL);
-      resolve(false);
-      return;
-    }
-    let done = false;
-    const finish = (v)=>{ if(done) return; done=true; resolve(v); };
-    let dismissL = null, failL = null, loadedL = null;
-
-    const cleanup = () => {
-      try { dismissL && dismissL.remove(); } catch(e){}
-      try { failL && failL.remove(); } catch(e){}
-      try { loadedL && loadedL.remove(); } catch(e){}
-    };
-
-    try {
-      // Listen for dismissal (user watched)
-      dismissL = await AdMobPlugin.addListener('onInterstitialAdDismissed', () => {
-        cleanup();
-        finish(true);  // ✅ Treat as rewarded
-      });
-
-      // Listen for load failure
-      failL = await AdMobPlugin.addListener('onInterstitialAdFailedToLoad', () => {
-        cleanup();
-        finish(false);
-      });
-
-      // Listen for load success (to know if it opened)
-      try {
-        loadedL = await AdMobPlugin.addListener('onInterstitialAdLoaded', () => {
-          console.log('[AdMob] Interstitial loaded');
-        });
-      } catch(e){}
-
-      await AdMobPlugin.prepareInterstitial({ adId: ADMOB.INTERSTITIAL });
-      await AdMobPlugin.showInterstitial();
-
-      // Safety net — if no event fires in 90s
-      setTimeout(()=>finish(true), 90000);
-
-    } catch(e){
-      console.warn('[AdMob] Interstitial error', e);
-      cleanup();
-      finish(false);
-    }
-  });
+    // ✅ Normal Interstitial ad — NON-REWARDED use only
+// (Screen transitions, level complete, etc.)
+async showInterstitial(){
+  if(!this.available) {
+    console.log('[AdMob] Interstitial (web fallback) — ' + ADMOB.INTERSTITIAL);
+    return;
+  }
+  try {
+    await AdMobPlugin.prepareInterstitial({ adId: ADMOB.INTERSTITIAL });
+    await AdMobPlugin.showInterstitial();
+  } catch(e){
+    console.warn('[AdMob] Interstitial error', e);
+  }
 },
     // Rewarded ad — returns true if user earned reward
     async showRewarded(){
@@ -20938,509 +20916,476 @@ showInterstitial(){
 <script src="https://js.onclckmn.com/static/onclicka.js"></script>
 <script>
 <script>
-/* ══════════════════════════════════════════════════════════════════
-   🖼️ EXTERNAL LINK → IFRAME MODAL SYSTEM  v2.0
-   ──────────────────────────────────────────────────────────────────
+/* ══════════════════════════════════════════════════════════════════════
+   🛡️ SMART AD-LINK GUARD + AUTO-RESTORE SYSTEM v3.0
+   ──────────────────────────────────────────────────────────────────────
    Kaam:
-   ✅ Adsterra Social Bar links → iframe modal
-   ✅ Banner ad links → iframe modal
-   ✅ window.open() → iframe modal
-   ✅ Dynamically added links (MutationObserver) → iframe modal
-   ✅ Referral share buttons → external browser (allowed)
-   ✅ Esc key, close button, timer se band ho sakta hai
-   ✅ "Open in Browser" escape option
-   ══════════════════════════════════════════════════════════════════ */
+   1. External links ko maximum possible block karta hai
+   2. If block na ho sake → app restart hone pe SAME screen pe wapis laye
+   3. User ko restart ka pata hi na chale
+   ══════════════════════════════════════════════════════════════════════ */
 
 (function(){
   'use strict';
 
-  // ══════════ CONFIG ══════════
-  const CONFIG = {
-    modalId: 'extLinkModal',
-    closeDelayMs: 0,           // 0 = manual close only
-    showTimer: true,           // timer countdown show kare
-    autoCloseAfterSec: 0,      // 0 = never auto close
-    allowedDomains: [          // yeh domains external browser mein khulenge
-      'wa.me', 'whatsapp.com',
-      'facebook.com', 'twitter.com', 'x.com',
-      't.me', 'telegram.org',
-      'mailto:', 'tel:', 'sms:',
-      'google.com/maps', 'maps.google.com'
-    ]
+  // ══════════════════════════════════════════════════════
+  //  PART 1: AUTO-RESTORE STATE TRACKER
+  //  Har action pe screen save karta hai taake restart pe
+  //  same jagah wapis aa sake
+  // ══════════════════════════════════════════════════════
+  
+  const RESTORE_KEY = 'it_restore_point_v1';
+  const RESTORE_MAX_AGE_MS = 60 * 1000; // 60 second ke andar ka restore valid hai
+
+  window.__saveRestorePoint = function(reason){
+    try {
+      // Get current screen
+      let currentScreen = 'home';
+      if (typeof window.currentScreen !== 'undefined') {
+        currentScreen = window.currentScreen;
+      } else {
+        // Fallback: find visible screen
+        const visible = document.querySelector('.screen:not(.hidden)');
+        if (visible) currentScreen = visible.id.replace('screen-', '');
+      }
+
+      // Get scroll position
+      const scrollY = window.pageYOffset || 0;
+
+      // Get quiz state if on quiz screen
+      let quizState = null;
+      try {
+        if (window.quiz && window.quiz.pool && window.quiz.i !== undefined) {
+          quizState = {
+            i: window.quiz.i,
+            total: window.quiz.total,
+            correct: window.quiz.correct,
+            wrong: window.quiz.wrong,
+            categoryKey: window.quiz.categoryKey,
+            poolQ: (window.quiz.pool[window.quiz.i] || [])[0] || null,
+            isPlaying: !document.getElementById('quizPlay')?.classList.contains('hidden'),
+            isDone: !document.getElementById('quizDone')?.classList.contains('hidden')
+          };
+        }
+      } catch(e){}
+
+      const point = {
+        screen: currentScreen,
+        scrollY: scrollY,
+        quiz: quizState,
+        reason: reason || 'unknown',
+        at: Date.now()
+      };
+
+      localStorage.setItem(RESTORE_KEY, JSON.stringify(point));
+      console.log('[Restore] Saved:', currentScreen, 'reason:', reason);
+    } catch(e) {
+      console.warn('[Restore] save failed', e);
+    }
   };
 
-  // ══════════ HELPERS ══════════
-  const isExternalUrl = (url) => {
+  // Save on screen change
+  const _origGoTo = window.goTo;
+  if (typeof _origGoTo === 'function') {
+    window.goTo = function(name){
+      try { window.__saveRestorePoint('navigate-' + name); } catch(e){}
+      return _origGoTo.apply(this, arguments);
+    };
+  }
+
+  // Save on visibility change (background)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      window.__saveRestorePoint('visibility-hidden');
+      try { if (window.save) window.save(); } catch(e){}
+    }
+  });
+
+  // Save on pagehide (external navigation)
+  window.addEventListener('pagehide', () => {
+    window.__saveRestorePoint('pagehide');
+    try { if (window.save) window.save(); } catch(e){}
+  });
+
+  // Save on beforeunload
+  window.addEventListener('beforeunload', () => {
+    window.__saveRestorePoint('beforeunload');
+    try { if (window.save) window.save(); } catch(e){}
+  });
+
+  // Save every 3 seconds (mining timer safety)
+  setInterval(() => {
+    if (window.state && window.state.loggedIn) {
+      window.__saveRestorePoint('autosave');
+      try { if (window.save) window.save(); } catch(e){}
+    }
+  }, 3000);
+
+  // ══════════════════════════════════════════════════════
+  //  PART 2: AUTO-RESTORE ON BOOT
+  //  Jab app load ho, check karo agar recent restore point hai
+  // ══════════════════════════════════════════════════════
+  
+  function attemptRestore(){
+    try {
+      const raw = localStorage.getItem(RESTORE_KEY);
+      if (!raw) return;
+      
+      const point = JSON.parse(raw);
+      const age = Date.now() - (point.at || 0);
+      
+      // Restore only if recent
+      if (age > RESTORE_MAX_AGE_MS) {
+        console.log('[Restore] Too old, skipping:', Math.round(age/1000) + 's');
+        localStorage.removeItem(RESTORE_KEY);
+        return;
+      }
+      
+      console.log('[Restore] Recent point found:', point.screen, Math.round(age/1000) + 's ago');
+      
+      // Wait for app to be fully booted
+      let attempts = 0;
+      const tryRestore = () => {
+        attempts++;
+        if (attempts > 30) return; // 6 seconds max
+        
+        if (!window.state || !window.state.loggedIn) {
+          setTimeout(tryRestore, 200);
+          return;
+        }
+        
+        if (typeof window.goTo !== 'function') {
+          setTimeout(tryRestore, 200);
+          return;
+        }
+        
+        // App is ready — restore
+        try {
+          // Restore screen
+          if (point.screen && point.screen !== 'home') {
+            window.goTo(point.screen);
+            
+            // Restore scroll after a moment
+            setTimeout(() => {
+              if (point.scrollY) {
+                window.scrollTo({ top: point.scrollY, behavior: 'instant' });
+              }
+            }, 400);
+          }
+          
+          // Restore quiz if we were in quiz
+          if (point.quiz && point.quiz.isPlaying && window.quiz) {
+            console.log('[Restore] Quiz was in progress');
+          }
+          
+          // Show subtle toast
+          setTimeout(() => {
+            try {
+              if (typeof window.showNotice === 'function') {
+                window.showNotice({
+                  icon: '✨',
+                  title: 'Welcome Back',
+                  message: 'Session resumed automatically',
+                  type: 'info',
+                  duration: 1800
+                });
+              }
+            } catch(e){}
+          }, 800);
+          
+          // Clear restore point after successful restore
+          setTimeout(() => {
+            localStorage.removeItem(RESTORE_KEY);
+          }, 3000);
+          
+        } catch(e) {
+          console.warn('[Restore] Failed:', e);
+        }
+      };
+      
+      setTimeout(tryRestore, 500);
+      
+    } catch(e) {
+      console.warn('[Restore] Error:', e);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  PART 3: EXTERNAL LINK INTERCEPTION (Maximum)
+  // ══════════════════════════════════════════════════════
+  
+  const ALLOW_EXTERNAL = [
+    'wa.me', 'whatsapp.com', 'api.whatsapp.com',
+    'facebook.com/sharer', 'twitter.com/intent', 'x.com/intent',
+    't.me/share', 'telegram.me/share',
+    'mailto:', 'tel:', 'sms:', 'mail.google'
+  ];
+  
+  const isAllowedExternal = (url) => {
     if (!url) return false;
+    const u = String(url).toLowerCase();
+    return ALLOW_EXTERNAL.some(a => u.includes(a));
+  };
+  
+  const isExternal = (url) => {
     try {
       const u = new URL(url, location.href);
-      return u.origin !== location.origin &&
-             (u.protocol === 'http:' || u.protocol === 'https:');
+      return (u.protocol === 'http:' || u.protocol === 'https:') 
+             && u.origin !== location.origin;
     } catch(e){ return false; }
   };
 
-  const isAllowedExternal = (url) => {
-    if (!url) return false;
-    const lower = url.toLowerCase();
-    return CONFIG.allowedDomains.some(d => lower.includes(d));
-  };
-
-  const getHostname = (url) => {
-    try { return new URL(url, location.href).hostname || url; }
-    catch(e){ return url; }
-  };
-
-  // ══════════ BUILD MODAL (once) ══════════
-  function buildModal(){
-    if (document.getElementById(CONFIG.modalId)) return;
-
-    const modal = document.createElement('div');
-    modal.id = CONFIG.modalId;
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.innerHTML = `
-      <style>
-        #${CONFIG.modalId}{
-          position:fixed;inset:0;z-index:2147483640;
-          background:rgba(0,0,0,.94);
-          backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-          display:none;flex-direction:column;
-          animation:extModalFade .25s ease;
-          font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-        }
-        #${CONFIG.modalId}.open{display:flex;}
-        @keyframes extModalFade{from{opacity:0}to{opacity:1}}
-
-        #${CONFIG.modalId} .elm-top{
-          display:flex;align-items:center;gap:10px;
-          padding:12px 14px;
-          background:linear-gradient(135deg,#1a1f37,#0f1420);
-          border-bottom:1px solid #232b45;
-          flex-shrink:0;
-          box-shadow:0 4px 20px rgba(0,0,0,.5);
-        }
-        #${CONFIG.modalId} .elm-logo{
-          width:36px;height:36px;border-radius:11px;
-          background:linear-gradient(135deg,#6366f1,#22d3ee);
-          display:grid;place-items:center;font-size:17px;
-          flex-shrink:0;
-          box-shadow:0 4px 12px rgba(99,102,241,.5);
-        }
-        #${CONFIG.modalId} .elm-info{
-          flex:1;min-width:0;
-        }
-        #${CONFIG.modalId} .elm-label{
-          font-size:9px;letter-spacing:1.6px;text-transform:uppercase;
-          color:#64748b;font-weight:800;line-height:1;
-        }
-        #${CONFIG.modalId} .elm-title{
-          font-size:13px;font-weight:800;color:#f1f5f9;
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-          margin-top:3px;letter-spacing:.2px;
-        }
-        #${CONFIG.modalId} .elm-timer{
-          display:flex;align-items:center;gap:6px;
-          padding:6px 12px;border-radius:999px;
-          background:rgba(34,211,238,.12);
-          border:1px solid rgba(34,211,238,.35);
-          color:#22d3ee;font-size:12px;font-weight:800;
-          font-family:'SF Mono',Monaco,monospace;
-          flex-shrink:0;
-        }
-        #${CONFIG.modalId} .elm-timer .dot{
-          width:7px;height:7px;border-radius:50%;
-          background:#22d3ee;
-          animation:extPulse 1.4s ease-in-out infinite;
-        }
-        @keyframes extPulse{0%,100%{opacity:1}50%{opacity:.3}}
-
-        #${CONFIG.modalId} .elm-actions{
-          display:flex;gap:6px;flex-shrink:0;
-        }
-        #${CONFIG.modalId} .elm-btn{
-          width:38px;height:38px;border-radius:11px;
-          cursor:pointer;font-size:15px;font-weight:900;
-          display:grid;place-items:center;
-          transition:all .15s;
-          -webkit-tap-highlight-color:transparent;
-          font-family:inherit;
-          border:1px solid transparent;
-        }
-        #${CONFIG.modalId} .elm-btn:active{transform:scale(.94)}
-        #${CONFIG.modalId} .elm-btn-browser{
-          background:rgba(99,102,241,.15);
-          border-color:rgba(99,102,241,.4);
-          color:#818cf8;
-        }
-        #${CONFIG.modalId} .elm-btn-browser:hover{
-          background:rgba(99,102,241,.3);
-          color:#a5b4fc;
-        }
-        #${CONFIG.modalId} .elm-btn-close{
-          background:rgba(239,68,68,.15);
-          border-color:rgba(239,68,68,.4);
-          color:#ef4444;
-        }
-        #${CONFIG.modalId} .elm-btn-close:hover{
-          background:rgba(239,68,68,.3);
-        }
-
-        #${CONFIG.modalId} .elm-body{
-          flex:1;position:relative;overflow:hidden;
-          background:#0a0e1a;
-        }
-        #${CONFIG.modalId} .elm-frame{
-          position:absolute;inset:0;
-          width:100%;height:100%;border:0;
-          background:#fff;opacity:0;
-          transition:opacity .4s ease;
-        }
-        #${CONFIG.modalId} .elm-frame.loaded{opacity:1}
-        #${CONFIG.modalId} .elm-loader{
-          position:absolute;inset:0;
-          display:flex;flex-direction:column;
-          align-items:center;justify-content:center;gap:16px;
-          background:radial-gradient(circle at 50% 40%,#151b2e,#0a0e1a 70%);
-          color:#94a3b8;font-size:13px;
-          transition:opacity .4s ease;
-        }
-        #${CONFIG.modalId} .elm-loader.hide{
-          opacity:0;pointer-events:none;
-        }
-        #${CONFIG.modalId} .elm-spin{
-          width:50px;height:50px;border-radius:50%;
-          border:3px solid rgba(99,102,241,.15);
-          border-top-color:#6366f1;
-          border-right-color:#22d3ee;
-          animation:extSpin 1s linear infinite;
-        }
-        @keyframes extSpin{to{transform:rotate(360deg)}}
-        #${CONFIG.modalId} .elm-loader-text{
-          font-weight:600;color:#cbd5e1;letter-spacing:.3px;
-        }
-        #${CONFIG.modalId} .elm-loader-sub{
-          font-size:11px;color:#64748b;font-weight:600;
-          display:flex;align-items:center;gap:6px;
-        }
-        #${CONFIG.modalId} .elm-loader-sub .pulse{
-          width:6px;height:6px;border-radius:50%;
-          background:#22d3ee;
-          animation:extPulse 1.5s ease-in-out infinite;
-        }
-
-        /* Bottom hint bar */
-        #${CONFIG.modalId} .elm-bottom{
-          padding:10px 14px;
-          background:#0f1420;
-          border-top:1px solid #232b45;
-          color:#9ca3af;
-          font-size:11px;text-align:center;
-          flex-shrink:0;line-height:1.5;
-        }
-        #${CONFIG.modalId} .elm-bottom b{color:#fbbf24}
-      </style>
-
-      <!-- Top bar -->
-      <div class="elm-top">
-        <div class="elm-logo">🌐</div>
-        <div class="elm-info">
-          <div class="elm-label">Sponsored Link</div>
-          <div class="elm-title" id="elmTitle">Loading...</div>
-        </div>
-        <div class="elm-timer" id="elmTimer" style="display:none">
-          <span class="dot"></span>
-          <span id="elmTimerVal">0s</span>
-        </div>
-        <div class="elm-actions">
-          <button class="elm-btn elm-btn-browser" id="elmOpenBrowser" title="Open in external browser">↗</button>
-          <button class="elm-btn elm-btn-close" id="elmClose" title="Close (Esc)">✕</button>
-        </div>
-      </div>
-
-      <!-- Body -->
-      <div class="elm-body">
-        <iframe
-          id="elmFrame"
-          class="elm-frame"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-modals allow-orientation-lock allow-pointer-lock allow-top-navigation-by-user-activation"
-          referrerpolicy="no-referrer-when-downgrade"
-          allow="autoplay; encrypted-media; picture-in-picture; fullscreen; geolocation"
-          scrolling="yes"
-          loading="eager">
-        </iframe>
-        <div class="elm-loader" id="elmLoader">
-          <div class="elm-spin"></div>
-          <div class="elm-loader-text">Opening content</div>
-          <div class="elm-loader-sub">
-            <span class="pulse"></span>
-            <span>Please wait</span>
+  // Build our blocker modal (simple, fast)
+  let blockerModal = null;
+  
+  function buildBlocker(){
+    if (blockerModal) return blockerModal;
+    
+    blockerModal = document.createElement('div');
+    blockerModal.id = 'adGuardModal';
+    blockerModal.innerHTML = `
+      <div style="position:fixed;inset:0;z-index:2147483645;
+        background:rgba(0,0,0,.94);backdrop-filter:blur(10px);
+        display:flex;flex-direction:column;
+        font-family:'Inter',-apple-system,sans-serif;
+        animation:adgFade .25s ease">
+        <style>
+          @keyframes adgFade{from{opacity:0}to{opacity:1}}
+          #adGuardModal .adg-top{
+            display:flex;align-items:center;gap:10px;
+            padding:12px 14px;background:linear-gradient(135deg,#1a1f37,#0f1420);
+            border-bottom:1px solid #232b45;flex-shrink:0;
+          }
+          #adGuardModal .adg-logo{
+            width:36px;height:36px;border-radius:11px;
+            background:linear-gradient(135deg,#6366f1,#22d3ee);
+            display:grid;place-items:center;font-size:17px;
+          }
+          #adGuardModal .adg-info{flex:1;min-width:0}
+          #adGuardModal .adg-label{
+            font-size:9px;letter-spacing:1.6px;text-transform:uppercase;
+            color:#64748b;font-weight:800;
+          }
+          #adGuardModal .adg-title{
+            font-size:13px;font-weight:800;color:#f1f5f9;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+            margin-top:3px;
+          }
+          #adGuardModal .adg-close{
+            width:38px;height:38px;border-radius:11px;
+            background:rgba(239,68,68,.15);
+            border:1px solid rgba(239,68,68,.4);
+            color:#ef4444;font-size:16px;font-weight:900;
+            cursor:pointer;display:grid;place-items:center;
+          }
+          #adGuardModal .adg-frame{
+            flex:1;border:0;width:100%;height:100%;background:#fff;
+          }
+        </style>
+        <div class="adg-top">
+          <div class="adg-logo">🌐</div>
+          <div class="adg-info">
+            <div class="adg-label">Opening Content</div>
+            <div class="adg-title" id="adgTitle">Loading...</div>
           </div>
+          <button class="adg-close" id="adgClose">✕</button>
         </div>
-      </div>
-
-      <!-- Bottom hint -->
-      <div class="elm-bottom">
-        💡 Yeh content app ke andar khul raha hai. Band karne ke liye <b>✕</b> dabayein ya <b>Esc</b> key use karein.
+        <iframe id="adgFrame" class="adg-frame"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+          referrerpolicy="no-referrer-when-downgrade"
+          allow="autoplay; encrypted-media; fullscreen">
+        </iframe>
       </div>
     `;
-
-    document.body.appendChild(modal);
-
-    // Element refs
-    const closeBtn = modal.querySelector('#elmClose');
-    const browserBtn = modal.querySelector('#elmOpenBrowser');
-    const frame = modal.querySelector('#elmFrame');
-    const loader = modal.querySelector('#elmLoader');
-    const titleEl = modal.querySelector('#elmTitle');
-    const timerWrap = modal.querySelector('#elmTimer');
-    const timerVal = modal.querySelector('#elmTimerVal');
-
-    let currentUrl = '';
-    let timerHandle = null;
-
-    // ══════════ IFRAME LOAD ══════════
-    frame.addEventListener('load', () => {
-      try {
-        // some browsers fire load for about:blank also
-        if (frame.src && frame.src !== 'about:blank') {
-          frame.classList.add('loaded');
-          loader.classList.add('hide');
-          setTimeout(()=>{ try { loader.style.display = 'none'; } catch(e){} }, 450);
-        }
-      } catch(e){}
-    });
-
-    // Safety fallback — reveal iframe after 4s no matter what
-    setTimeout(() => {
-      if (modal.classList.contains('open') && !frame.classList.contains('loaded')) {
-        frame.classList.add('loaded');
-        loader.classList.add('hide');
-      }
-    }, 4000);
-
-    // ══════════ CLOSE ══════════
-    const closeModal = () => {
-      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
-      modal.classList.remove('open');
+    document.body.appendChild(blockerModal);
+    
+    const closeBtn = blockerModal.querySelector('#adgClose');
+    const frame = blockerModal.querySelector('#adgFrame');
+    
+    const close = () => {
+      blockerModal.style.display = 'none';
       document.body.style.overflow = '';
-      setTimeout(() => {
-        try { frame.src = 'about:blank'; } catch(e){}
-        frame.classList.remove('loaded');
-        loader.classList.remove('hide');
-        try { loader.style.display = 'flex'; } catch(e){}
-      }, 350);
-      console.log('[ExtLink] Closed');
+      setTimeout(() => { try { frame.src = 'about:blank'; } catch(e){} }, 200);
     };
-
-    closeBtn.addEventListener('click', closeModal);
-
-    // ══════════ OPEN IN BROWSER (escape hatch) ══════════
-    browserBtn.addEventListener('click', () => {
-      if (!currentUrl) return;
-      window.__allowRealOpen = true;
-      try { window.open(currentUrl, '_blank'); } catch(e){}
-      setTimeout(()=>{ window.__allowRealOpen = false; }, 800);
-    });
-
-    // ══════════ ESC KEY ══════════
+    
+    closeBtn.onclick = close;
+    
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.classList.contains('open')) {
-        closeModal();
+      if (e.key === 'Escape' && blockerModal.style.display !== 'none') {
+        close();
       }
     });
-
-    // ══════════ EXPOSE API ══════════
-    window.__extLinkModal = {
-      open: (url) => {
-        if (!url) return;
-        currentUrl = url;
-
-        // Update title
-        titleEl.textContent = getHostname(url);
-
-        // Reset frame
-        frame.classList.remove('loaded');
-        loader.style.display = 'flex';
-        loader.classList.remove('hide');
-
-        // Load URL
-        try { frame.src = url; } catch(e){
-          try { frame.src = 'about:blank'; } catch(e2){}
-        }
-
-        // Show modal
-        modal.classList.add('open');
-        document.body.style.overflow = 'hidden';
-
-        // Timer (optional)
-        if (CONFIG.showTimer && CONFIG.autoCloseAfterSec > 0) {
-          timerWrap.style.display = 'flex';
-          let remaining = CONFIG.autoCloseAfterSec;
-          timerVal.textContent = remaining + 's';
-          if (timerHandle) clearInterval(timerHandle);
-          timerHandle = setInterval(() => {
-            remaining--;
-            timerVal.textContent = Math.max(0, remaining) + 's';
-            if (remaining <= 0) {
-              clearInterval(timerHandle);
-              timerHandle = null;
-              closeModal();
-            }
-          }, 1000);
-        } else if (CONFIG.showTimer) {
-          // Just show a static "app" indicator
-          timerWrap.style.display = 'flex';
-          timerVal.textContent = 'In-App';
-        }
-
-        console.log('[ExtLink] Opened:', url);
-      },
-      close: closeModal
+    
+    blockerModal.__close = close;
+    blockerModal.__load = (url) => {
+      try {
+        const title = new URL(url).hostname || url;
+        blockerModal.querySelector('#adgTitle').textContent = title;
+      } catch(e){}
+      frame.src = url;
+      blockerModal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
     };
+    
+    return blockerModal;
+  }
+  
+  function openInBlocker(url){
+    if (!url) return false;
+    const b = buildBlocker();
+    b.__load(url);
+    console.log('[AdGuard] Blocked → iframe:', url);
+    window.__saveRestorePoint('blocked-ad-click');
+    return true;
   }
 
-  // ══════════ OPEN HELPER ══════════
-  function openInModal(url){
-    if (!url || typeof url !== 'string') return false;
-
-    // Allowlist — external browser ke liye (WhatsApp share etc.)
-    if (isAllowedExternal(url)) {
-      console.log('[ExtLink] Allowed external:', url);
-      return false; // caller will use window.open
-    }
-
-    if (!isExternalUrl(url)) return false;
-
-    buildModal();
-    if (window.__extLinkModal && window.__extLinkModal.open) {
-      window.__extLinkModal.open(url);
-      return true;
-    }
-    return false;
-  }
-
-  // ══════════ 1. INTERCEPT <a> CLICKS (Parent Document) ══════════
-  document.addEventListener('click', function(e){
-    // Skip if our ad overlay is active
+  // Intercept ALL click phases on <a> elements
+  const clickHandler = (e) => {
+    // Skip if our ad overlay is running
     if (document.getElementById('itAdOverlay')) return;
-
-    // Skip if inside our own modal (iframes handle their own)
-    if (e.target.closest && e.target.closest('#' + CONFIG.modalId)) return;
-
+    
+    // Skip if inside our blocker
+    if (e.target.closest && e.target.closest('#adGuardModal')) return;
+    
     const a = e.target.closest && e.target.closest('a');
     if (!a) return;
-
-    const href = a.getAttribute('href');
+    
+    const href = a.getAttribute('href') || a.href;
     if (!href) return;
     if (href.startsWith('#') || href.startsWith('javascript:')) return;
-    if (href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('sms:')) {
-      return; // allow these
+    
+    // Allow referral share links
+    if (isAllowedExternal(href)) {
+      console.log('[AdGuard] Allowed (share):', href);
+      return;
     }
-
-    // Same-origin? allow
-    let url;
-    try { url = new URL(href, location.href); }
-    catch(err){ return; }
-
-    if (url.origin === location.origin) return;
-
-    // External — intercept
-    if (openInModal(url.href)) {
+    
+    // Is it external?
+    if (isExternal(href)) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      openInBlocker(href);
+      return false;
     }
-  }, true); // ✅ capture phase — runs before any other handler
-
-  // ══════════ 2. INTERCEPT window.open ══════════
+  };
+  
+  // Attach on ALL phases
+  document.addEventListener('click', clickHandler, true);
+  document.addEventListener('mousedown', (e) => {
+    const a = e.target.closest && e.target.closest('a[target="_blank"]');
+    if (a) {
+      const href = a.getAttribute('href') || a.href;
+      if (href && isExternal(href) && !isAllowedExternal(href)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  }, true);
+  document.addEventListener('auxclick', (e) => {
+    if (e.button === 1) { // middle click
+      const a = e.target.closest && e.target.closest('a');
+      if (a) {
+        const href = a.getAttribute('href') || a.href;
+        if (href && isExternal(href) && !isAllowedExternal(href)) {
+          e.preventDefault();
+          openInBlocker(href);
+        }
+      }
+    }
+  }, true);
+  
+  // Override window.open
   const _origWindowOpen = window.open.bind(window);
   window.__allowRealOpen = false;
-
+  
   window.open = function(url, target, features){
-    // Explicit allow (referral share buttons etc.)
     if (window.__allowRealOpen) {
       return _origWindowOpen(url, target, features);
     }
-
     if (url && typeof url === 'string' && /^https?:/i.test(url)) {
-      if (openInModal(url)) {
-        return null; // blocked real open
+      if (isAllowedExternal(url)) {
+        return _origWindowOpen(url, target, features);
+      }
+      if (isExternal(url)) {
+        openInBlocker(url);
+        return null;
       }
     }
     return _origWindowOpen(url, target, features);
   };
-
-  // ══════════ 3. INTERCEPT target="_blank" via mutation ══════════
-  // Adsterra sometimes adds target="_blank" dynamically
-  const fixTargetBlank = (root) => {
-    try {
-      const anchors = (root || document).querySelectorAll('a[target="_blank"]');
-      anchors.forEach(a => {
-        const href = a.getAttribute('href');
-        if (!href) return;
-        if (href.startsWith('#') || href.startsWith('javascript:')) return;
-
-        let url;
-        try { url = new URL(href, location.href); }
-        catch(err){ return; }
-
-        if (url.origin === location.origin) return;
-
-        // Add our own click handler as backup
-        if (!a.__extLinkBound) {
-          a.__extLinkBound = true;
-          a.addEventListener('click', (ev) => {
-            if (openInModal(url.href)) {
-              ev.preventDefault();
-              ev.stopPropagation();
-              ev.stopImmediatePropagation();
-            }
-          }, true);
-        }
-      });
-    } catch(e){}
-  };
-
-  // ══════════ 4. MUTATION OBSERVER — dynamically added links ══════════
+  
+  // Override location.assign (best effort)
+  try {
+    const _origAssign = window.location.assign.bind(window.location);
+    // Can't override directly, but we can add a proxy wrapper if needed
+  } catch(e){}
+  
+  // Intercept dynamically-added links (Adsterra Social Bar)
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
-      if (m.addedNodes && m.addedNodes.length) {
+      if (m.addedNodes) {
         m.addedNodes.forEach(node => {
-          if (node.nodeType === 1) { // element
-            // If it's an anchor itself
-            if (node.tagName === 'A') fixTargetBlank(node.parentNode || document);
-            else fixTargetBlank(node);
+          if (node.nodeType === 1) {
+            // Find all <a> inside new node
+            const anchors = node.tagName === 'A' ? [node] : node.querySelectorAll?.('a') || [];
+            anchors.forEach(a => {
+              const href = a.getAttribute('href');
+              if (!href) return;
+              if (isExternal(href) && !isAllowedExternal(href)) {
+                // Mark it
+                a.setAttribute('data-adguard', '1');
+                // Prevent default via onclick fallback
+                if (!a.__adgBound) {
+                  a.__adgBound = true;
+                  a.onclick = (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    openInBlocker(href);
+                    return false;
+                  };
+                }
+              }
+            });
           }
         });
       }
     }
   });
-
-  // Start observing after DOM ready
-  const startObserver = () => {
-    try {
-      observer.observe(document.body || document.documentElement, {
-        childList: true,
-        subtree: true
-      });
-      // Initial scan
-      fixTargetBlank(document);
-    } catch(e){}
-  };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startObserver);
+  
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
   } else {
-    startObserver();
+    document.addEventListener('DOMContentLoaded', () => {
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
   }
-
-  // ══════════ 5. EXPOSE GLOBAL HELPERS ══════════
-  window.openExtLinkModal = (url) => openInModal(url);
-  window.closeExtLinkModal = () => {
-    if (window.__extLinkModal) window.__extLinkModal.close();
-  };
-
-  console.log('✅ External link iframe interceptor v2.0 ready');
+  
+  // ══════════════════════════════════════════════════════
+  //  PART 4: beforeunload GUARD
+  //  Agar user phir bhi external navigate kare to state save
+  //  ho chuki hai — auto restore will kick in
+  // ══════════════════════════════════════════════════════
+  
+  window.addEventListener('beforeunload', (e) => {
+    // Save everything
+    window.__saveRestorePoint('beforeunload-final');
+    try { if (window.save) window.save(); } catch(err){}
+    
+    // Note: we don't preventDefault because it triggers a confirm dialog
+    // which is annoying and unreliable on mobile WebView
+    // Instead we rely on auto-restore
+  });
+  
+  // ══════════════════════════════════════════════════════
+  //  PART 5: KICK OFF AUTO-RESTORE
+  // ══════════════════════════════════════════════════════
+  
+  window.addEventListener('load', () => {
+    setTimeout(attemptRestore, 3000); // Wait for splash + boot
+  });
+  
+  console.log('✅ Smart Ad-Guard + Auto-Restore v3.0 ready');
 
 })();
 
@@ -21459,17 +21404,6 @@ window.addEventListener('load', function() {
     }
   }
 });
-
-/* ══════════ Save state on any external click ══════════ */
-document.addEventListener('click', function(e){
-  try {
-    const t = e.target;
-    if (!t) return;
-    if (t.tagName === 'A' && t.href && /^https?:/i.test(t.href)) {
-      if (window.persistNow) persistNow('click:external');
-    }
-  } catch(_){}
-}, true);
 </script>
 </body>
 </html>
