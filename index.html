@@ -1394,63 +1394,10 @@ body{
   }
 }
 
-/* ══════════ STICKY BANNER ══════════ */
-#stickyBannerWrap{
-  position:fixed;
-  left:0;
-  right:0;
-  bottom:calc(var(--nav-h) + 20px + env(safe-area-inset-bottom,0px));
-  z-index:95;
-  display:none;
-  justify-content:center;
-  pointer-events:none;
-  padding:0 8px;
-}
-#stickyBannerWrap.show{
-  display:flex;
-}
-#stickyBannerBox{
-  background:var(--surface);
-  border:1px solid var(--border2);
-  border-radius:14px;
-  padding:6px 8px;
-  box-shadow:0 8px 24px rgba(0,0,0,.5);
-  display:flex;
-  justify-content:center;
-  overflow:hidden;
-  min-height:60px;
-  max-width:532px;
-  width:100%;
-  pointer-events:auto;
-  position:relative;
-}
-#stickyBannerClose{
-  position:absolute;
-  top:-8px;
-  right:-8px;
-  width:22px;
-  height:22px;
-  border-radius:50%;
-  background:var(--danger);
-  color:#fff;
-  border:2px solid var(--surface);
-  font-size:12px;
-  font-weight:900;
-  cursor:pointer;
-  display:grid;
-  place-items:center;
-  box-shadow:0 2px 6px rgba(0,0,0,.4);
-  z-index:2;
-  padding:0;
-  line-height:1;
-}
-#stickyBannerClose:hover{filter:brightness(1.15)}
-
 /* ══════════ SAFETY RULES — nav kabhi auth par na dikhe ══════════ */
 body:not(.is-logged-in) .nav,
 body:not(.is-logged-in) .music-btn,
 body:not(.is-logged-in) #backToTop,
-body:not(.is-logged-in) #stickyBannerWrap,
 body:not(.is-logged-in) .app-header {
   display: none !important;
 }
@@ -1649,23 +1596,6 @@ body:not(.is-logged-in) #mainApp {
   </div>
 </div>
 
-<!-- ══════════ ADSTERRA — SAFE BANNER #2 ══════════ -->
-<div class="card parallax-layer" data-depth="2" style="padding:10px;text-align:center;overflow:hidden">
-  <div style="font-size:9px;color:var(--muted);margin-bottom:6px;letter-spacing:1.5px;font-weight:800">ADVERTISEMENT</div>
-  <div style="display:flex;justify-content:center;overflow:hidden;min-height:90px">
-    <script type="text/javascript">
-      atOptions = {
-        'key' : 'b90caa09f60190f064fd48c921b80f21',
-        'format' : 'iframe',
-        'height' : 90,
-        'width' : 728,
-        'params' : {}
-      };
-    </script>
-    <script type="text/javascript" src="https://www.highrevenueformat.com/b90caa09f60190f064fd48c921b80f21/invoke.js"></script>
-  </div>
-</div>
-
         <div class="card intro-card parallax-layer" data-depth="2">
     <h3>✨ About Info Token</h3>
     <p>Info Token turns your knowledge and time into <b>real rewards</b>...</p>
@@ -1701,22 +1631,6 @@ body:not(.is-logged-in) #mainApp {
     </div>
   </div>
 
-  <!-- ══════════ ADSTERRA — BANNER 728x90 ══════════ -->
-  <div class="card parallax-layer" data-depth="2" style="padding:10px;text-align:center;overflow:hidden">
-    <div style="font-size:9px;color:var(--muted);margin-bottom:6px;letter-spacing:1.5px;font-weight:800">ADVERTISEMENT</div>
-    <div style="display:flex;justify-content:center;overflow:hidden;min-height:90px">
-      <script type="text/javascript">
-        atOptions = {
-          'key' : 'b90caa09f60190f064fd48c921b80f21',
-          'format' : 'iframe',
-          'height' : 90,
-          'width' : 728,
-          'params' : {}
-        };
-      </script>
-      <script type="text/javascript" src="https://www.highrevenueformat.com/b90caa09f60190f064fd48c921b80f21/invoke.js"></script>
-    </div>
-  </div>
 </section>
 
     <section id="screen-quiz" class="screen hidden">
@@ -2019,23 +1933,24 @@ body:not(.is-logged-in) #mainApp {
     <section id="screen-activity-points" class="screen hidden">
       <div class="card">
         <h2>⭐ Points Activity</h2>
-        <div class="activity-stats">
-          <div class="activity-stat">
-            <div class="as-l">Current Balance</div>
-            <div class="as-v" style="color:#fbbf24" id="actPtsBalance">0</div>
-          </div>
-          <div class="activity-stat">
-            <div class="as-l">Total Earned</div>
-            <div class="as-v" style="color:#10b981" id="actPtsEarned">0</div>
-          </div>
-        </div>
-        <div id="activityPointsList"></div>
+        <section id="screen-activity-tokens" class="screen hidden">
+  <div class="card">
+    <h2>💎 Tokens Activity</h2>
+    <div class="activity-stats">
+      <div class="activity-stat">
+        <div class="as-l">Current Balance</div>
+        <div class="as-v" style="color:#22d3ee;font-size:18px" id="actTokBalance">0.000000</div>
       </div>
-    </section>
+      <div class="activity-stat">
+        <div class="as-l">Total Earned</div>
+        <div class="as-v" style="color:#10b981;font-size:18px" id="actTokEarned">0.000000</div>
+      </div>
+    </div>
+    <div id="activityTokensList"></div>
+  </div>
+</section>
 
-    <section id="screen-activity-tokens" class="screen hidden">
-      <div class="card">
-        <h2>💎 Tokens Activity</h2>
+    
         <div class="activity-stats">
           <div class="activity-stat">
             <div class="as-l">Current Balance</div>
@@ -2331,8 +2246,12 @@ body:not(.is-logged-in) #mainApp {
     </section>
 
     <section id="screen-contact" class="screen hidden">
-      <div class="card">
-        <h2>📧 Contact Us</h2>
+  <div class="card banner-card">
+    <div class="banner-label">Advertisement</div>
+    <div class="banner-slot" id="banner-contact"></div>
+  </div>
+  <div class="card">
+    <h2>📧 Contact Us</h2>
         <p class="muted mb12" style="font-size:12px">We usually reply within 24–48 hours.</p>
         <form id="contactForm">
           <div class="field"><label>Your Name</label><input id="ctName" required placeholder="John Doe" /></div>
@@ -2358,7 +2277,14 @@ body:not(.is-logged-in) #mainApp {
     <section id="screen-privacy" class="screen hidden"><div class="card"><div class="legal-text" id="legalPrivacy"></div></div><div style="height:80px"></div></section>
     <section id="screen-terms" class="screen hidden"><div class="card"><div class="legal-text" id="legalTerms"></div></div><div style="height:80px"></div></section>
     <section id="screen-disclaimer" class="screen hidden"><div class="card"><div class="legal-text" id="legalDisclaimer"></div></div><div style="height:80px"></div></section>
-    <section id="screen-about" class="screen hidden"><div class="card"><div class="legal-text" id="legalAbout"></div></div><div style="height:80px"></div></section>
+    <section id="screen-about" class="screen hidden">
+  <div class="card banner-card">
+    <div class="banner-label">Advertisement</div>
+    <div class="banner-slot" id="banner-about"></div>
+  </div>
+  <div class="card"><div class="legal-text" id="legalAbout"></div></div>
+  <div style="height:80px"></div>
+</section>
   </main>
 
 <!-- ═══════════ GAME MODAL ═══════════ -->
@@ -2443,16 +2369,7 @@ body:not(.is-logged-in) #mainApp {
   <div class="search-results" id="searchResults"></div>
 </div>
 
-<!-- ══════════ STICKY BANNER — HAR SCREEN PAR ══════════ -->
-<div id="stickyBannerWrap">
-  <div id="stickyBannerBox">
-    <button id="stickyBannerClose" onclick="closeStickyBanner()" title="Close">✕</button>
-    <div id="stickyBannerContent" style="display:flex;justify-content:center;align-items:center;overflow:hidden;min-height:60px;width:100%">
-      <!-- Banner yahan dynamically load hoga -->
-    </div>
-  </div>
-</div>
-
+<script>
 /* ══════════════════════════════════════════════════════════════
    🎬 INTERSTITIAL SETTINGS UI HANDLERS
    ══════════════════════════════════════════════════════════════ */
@@ -2525,6 +2442,8 @@ setInterval(() => {
     try { refreshInterstitialUI(); } catch(e){}
   }
 }, 5000);
+</script>
+
 <script>
 /* ============================================================
    INFO TOKEN v5.4
@@ -2550,7 +2469,7 @@ const yesterdayLocal=()=>{
 /* ============================================================
    REWARDED AD SYSTEM v7 — Professional Overlay + Variable Timer
    ============================================================ */
-const ADSTERRA_SMARTLINK = 'https://www.profitableratecpmnetwork.com/pwh593fcr?key=b251c9c22c855816cf45a9a6e0a3918c';
+const ADSTERRA_SMARTLINK = 'https://www.profitableratecpmnetwork.com/pwh593fcr?key=61b6b9ee1b97b828d43338ecf21f4277';
 
 /* ══════════ TIMER DURATIONS (per ad-type) ══════════ */
 const AD_DURATION_BY_TYPE = {
@@ -2692,7 +2611,7 @@ function creditPendingRewardIfReady(showPopup = true) {
     try { refreshFeatureStatus(); } catch(e){}
     try { refreshAdsUI(); } catch(e){}
     try { buildAllGamesGrid(); } catch(e){}
-    return true;
+        return true;
   } finally {
     _creditInProgress = false;
   }
@@ -2707,35 +2626,20 @@ function creditPendingRewardIfReady(showPopup = true) {
    ⚠️ NOTE: AdMob Interstitial is NOT used here.
    It's only used in goTo() for screen transitions (non-reward).
    ══════════════════════════════════════════════════════════════ */
-function showRewardedAd(onComplete, opts = {}) {
-  if (_adInProgress) {
-    console.log('[Ad] Already in progress');
-    return;
-  }
-
-  // ✅ Save state BEFORE any ad activity
-  try { save(); } catch(e){}
-
-  const type = (opts.pendingReward && opts.pendingReward.type) || 'general';
-  const duration = opts.requiredSeconds || getAdDuration(type);
-
-  if (opts.pendingReward) {
-    setPendingReward({ ...opts.pendingReward, requiredSec: duration });
-  }
-
-  const wrapped = () => {
-    const credited = creditPendingRewardIfReady(true);
-    if (!credited && onComplete) {
-      try { onComplete(); } catch(e) { console.warn('[Ad] callback error', e); }
-    }
-  };
+function showRewardedAd(wrapped, type){
+  const adType = type || 'default';
+  const adDuration = getAdDuration(adType);
 
   const fallbackToOverlay = () => {
-    console.log('[Ad] → Adsterra overlay fallback');
-    _openAdOverlay(wrapped, duration);
+    _openAdOverlay(() => {
+      try { creditPendingRewardIfReady(true); } catch(e){}
+      if (typeof wrapped === 'function') {
+        try { wrapped(); } catch(e){ console.warn('[Ad] wrapped err', e); }
+      }
+    }, adDuration);
   };
 
-  // ══════════ PRIORITY 1: AdMob REWARDED VIDEO (native only) ══════════
+  // ══════════ PRIORITY 1: AdMob REWARDED VIDEO ══════════
   if (window.AdMobBridge && window.AdMobBridge.available) {
     _adInProgress = true;
     (async () => {
@@ -2750,12 +2654,29 @@ function showRewardedAd(onComplete, opts = {}) {
           return;
         }
 
-        // User closed early OR ad failed to load
-        console.log('[Ad] AdMob Rewarded not completed → fallback');
-        // Clear pending reward since user didn't complete
+        console.log('[Ad] AdMob Rewarded not completed → try Unity');
         try { clearPendingReward(); } catch(e){}
-        
-        // Show info message
+
+        // ══════════ PRIORITY 1.5: UNITY REWARDED ══════════
+        if (window.UnityAdsBridge && window.UnityAdsBridge.available) {
+          _adInProgress = true;
+          try {
+            console.log('[Ad] Attempting Unity Rewarded...');
+            const uRew = await window.UnityAdsBridge.showRewarded();
+            _adInProgress = false;
+            if (uRew === true) {
+              console.log('[Ad] ✅ Unity Rewarded watched → crediting reward');
+              wrapped();
+              return;
+            }
+          } catch(e) {
+            _adInProgress = false;
+            console.warn('[Ad] Unity Rewarded error', e);
+          }
+        }
+
+        // Both native ads failed → fall to overlay
+        console.log('[Ad] All native ads failed → Adsterra overlay');
         try {
           showNotice({
             icon: '⚠️',
@@ -2765,12 +2686,44 @@ function showRewardedAd(onComplete, opts = {}) {
             duration: 3000
           });
         } catch(e){}
+
+        fallbackToOverlay();
         
       } catch(e) {
-        console.warn('[Ad] AdMob Rewarded error → fallback', e);
+        console.warn('[Ad] AdMob Rewarded error → try Unity', e);
         _adInProgress = false;
+
+        // Try Unity as backup
+        if (window.UnityAdsBridge && window.UnityAdsBridge.available) {
+          try {
+            const uRew = await window.UnityAdsBridge.showRewarded();
+            if (uRew === true) { wrapped(); return; }
+          } catch(e2){}
+        }
         fallbackToOverlay();
       }
+    })();
+    return;
+  }
+
+  // ══════════ PRIORITY 2: UNITY REWARDED (no AdMob) ══════════
+  if (window.UnityAdsBridge && window.UnityAdsBridge.available) {
+    _adInProgress = true;
+    (async () => {
+      try {
+        console.log('[Ad] Attempting Unity Rewarded (no AdMob)...');
+        const uRew = await window.UnityAdsBridge.showRewarded();
+        _adInProgress = false;
+        if (uRew === true) {
+          wrapped();
+          return;
+        }
+      } catch(e) {
+        _adInProgress = false;
+        console.warn('[Ad] Unity Rewarded error', e);
+      }
+      try { clearPendingReward(); } catch(e){}
+      fallbackToOverlay();
     })();
     return;
   }
@@ -3402,7 +3355,6 @@ function applyLanguage(){
     {sel:'[onclick="goTo(\'about\')"]', key:'about', ic:'ℹ️'},
     {sel:'[onclick="goTo(\'privacy\')"]', key:'privacy', ic:'🔒'},
     {sel:'[onclick="goTo(\'terms\')"]', key:'terms', ic:'📜'},
-    {sel:[onclick]}, /* placeholder */
   ];
   const drawerManual2 = [
     {sel:'[onclick="goTo(\'profile\')"]', key:'profile', ic:'👤'},
@@ -15578,7 +15530,6 @@ heartCollection: 0,
       questionLock:'on',
         customMusicName:'',
   customMusicData:'',
-  stickyBannerClosed:''
 },
     profile:{name:'',phone:'',country:'',dob:'',bio:''},
     activityPoints:[],
@@ -18982,34 +18933,33 @@ function runSplashSequence(){
       if (raw) {
         const point = JSON.parse(raw);
         const age = Date.now() - (point.at || 0);
-        if (age < RESTORE_MAX_AGE_MS && point.screen && point.screen !== 'home') {
-          restorePoint = point;
-          console.log('[Init] 🔄 Restore point found:', point.screen, '·', Math.round(age/1000)+'s ago');
-        } else {
-          localStorage.removeItem(RESTORE_KEY);
-        }
-      }
+        // ✅ Restore on ANY screen (including home) when returning from ad
+ if (age < RESTORE_MAX_AGE_MS && point.screen) {
+  restorePoint = point;
+  console.log('[Init] 🔄 Restore point found:', point.screen, '·', Math.round(age/1000)+'s ago');
+ } else {
+  localStorage.removeItem(RESTORE_KEY);
+}
+       }
     } catch(e){}
     
     if (restorePoint) {
-      // ════════ SKIP SPLASH — Return to previous screen ════════
-      const splash = document.getElementById('splash');
-      if (splash) splash.remove();
-      
-      // Boot app directly
-      bootAfterSplash();
-      
-      // Restore the exact screen + scroll user was on
-      setTimeout(() => {
-        try {
-          if (typeof window.goTo === 'function') {
-            window.goTo(restorePoint.screen);
-            setTimeout(() => {
-              if (restorePoint.scrollY) {
-                window.scrollTo({ top: restorePoint.scrollY, behavior: 'instant' });
-              }
-            }, 400);
+  // Skip splash
+  const splash = document.getElementById('splash');
+  if (splash) splash.remove();
+  
+  bootAfterSplash();
+  
+  setTimeout(() => {
+    try {
+      if (typeof window.goTo === 'function') {
+        window.goTo(restorePoint.screen);   // ✅ Restores even if 'home'
+        setTimeout(() => {
+          if (restorePoint.scrollY) {
+            window.scrollTo({ top: restorePoint.scrollY, behavior: 'instant' });
           }
+        }, 400);
+      }
           // Subtle toast so user knows it resumed
           if (typeof window.showNotice === 'function') {
             setTimeout(() => {
@@ -21784,28 +21734,6 @@ function showNotice({icon='✨', title='Notice', message='', type='info', durati
   popup.onclick = ()=>{ clearTimeout(timer); host.remove(); if(_pnCurrent===host) _pnCurrent=null; };
 }
 
-/* Confirm Dialog */
-function showConfirmDialog({icon='❓', iconType='info', title='Confirm', message='', confirmText='OK', cancelText='Cancel', confirmClass='', single=false, onConfirm, onCancel}){
-  const back = document.createElement('div');
-  back.className = 'pcd-back open';
-  back.innerHTML = `
-    <div class="pcd-modal ${iconType}">
-      <div class="pcd-ic ${iconType}">${icon}</div>
-      <div class="pcd-title">${title}</div>
-      <div class="pcd-msg">${message}</div>
-      <div class="pcd-actions ${single?'pcd-single':''}">
-        ${!single?`<button class="pcd-btn cancel" id="pcdCancel">${cancelText}</button>`:''}
-        <button class="pcd-btn confirm ${confirmClass}" id="pcdConfirm">${confirmText}</button>
-      </div>
-    </div>`;
-  document.body.appendChild(back);
-  const close = ()=>{ back.style.opacity='0'; setTimeout(()=>back.remove(),250); };
-  back.querySelector('#pcdConfirm').onclick = ()=>{ close(); onConfirm && onConfirm(); };
-  const c = back.querySelector('#pcdCancel');
-  if(c) c.onclick = ()=>{ close(); onCancel && onCancel(); };
-  back.onclick = (e)=>{ if(e.target===back){ close(); onCancel && onCancel(); } };
-}
-
 /* ══════════ PROFESSIONAL CONFIRM DIALOG ══════════ */
 function showConfirmDialog({icon='❓', iconType='info', title='Confirm', message='', confirmText='OK', cancelText='Cancel', confirmClass='', single=false, onConfirm, onCancel}){
   const back=document.createElement('div');
@@ -21856,72 +21784,6 @@ function scrollToTop(){
 document.addEventListener('visibilitychange', save);
 window.addEventListener('beforeunload', save);
 
-/* ══════════════════════════════════════════════════════════════
-   STICKY BANNER — HAR SCREEN PAR DIKHANE KA LOGIC
-   ══════════════════════════════════════════════════════════════ */
-let _stickyBannerLoaded = false;
-
-function initStickyBanner(){
-  const wrap = document.getElementById('stickyBannerWrap');
-  if(!wrap) return;
-  
-  // Agar user ne aaj close kiya hai to mat dikhao
-  if(state.settings.stickyBannerClosed === today()){
-    console.log('[StickyBanner] User closed today — skip');
-    return;
-  }
-  
-  // Wrap ko show karo
-  wrap.classList.add('show');
-  
-  // Banner sirf ek baar load karo
-  if(_stickyBannerLoaded) return;
-  _stickyBannerLoaded = true;
-  
-  const container = document.getElementById('stickyBannerContent');
-  if(!container) return;
-  
-  console.log('[StickyBanner] Loading banner...');
-  
-  // ══════════ YAHAN APNA ADSTERRA BANNER KEY PASTE KAREIN ══════════
-  const BANNER_KEY = 'a51c3849eb30f16f303248114b2b8de3';
-  
-  // Adsterra 468x60 banner code inject karo
-  const script1 = document.createElement('script');
-  script1.type = 'text/javascript';
-  script1.textContent = `
-    atOptions = {
-      'key' : '${BANNER_KEY}',
-      'format' : 'iframe',
-      'height' : 60,
-      'width' : 468,
-      'params' : {}
-    };
-  `;
-  container.appendChild(script1);
-  
-  const script2 = document.createElement('script');
-  script2.type = 'text/javascript';
-  script2.src = 'https://www.highrevenueformat.com/' + BANNER_KEY + '/invoke.js';
-  script2.async = true;
-  container.appendChild(script2);
-}
-
-function closeStickyBanner(){
-  const wrap = document.getElementById('stickyBannerWrap');
-  if(wrap) wrap.classList.remove('show');
-  
-  // Aaj ke liye yaad rakho
-  state.settings.stickyBannerClosed = today();
-  save();
-  
-  // Memory free karo
-  const container = document.getElementById('stickyBannerContent');
-  if(container) container.innerHTML = '';
-  _stickyBannerLoaded = false;
-  
-  console.log('[StickyBanner] Closed by user');
-}
 </script>
 <!-- ═══════════ ADMOB BRIDGE (Capacitor + Web Fallback) ═══════════ -->
 <script>
@@ -21943,7 +21805,8 @@ function closeStickyBanner(){
   available: isNative && !!AdMobPlugin,
   ids: ADMOB,
   _interstitialReady: false,
-  _bannerVisible: false,
+_bannerVisible: false,
+_showingInterstitial: false,
 
   // ══════════ BANNER ══════════
   async showBanner(){
@@ -22051,23 +21914,6 @@ if (window.AdMobBridge.available) {
 
   console.log('✅ AdMob Bridge ready. Native:', window.AdMobBridge.available);
 })();
-</script>
-
-<!-- ══════════ MONETAG REWARDED INTERSTITIAL ══════════ -->
-<script src="https://YOUR_MONETAG_ZONE.vignette.min.js" 
-        data-zone="YOUR_MONETAG_ZONE_ID" 
-        data-sdk="show_YOUR_MONETAG_ZONE_ID" 
-        async></script>
-
-<!-- ══════════ MONETAG IN-PAGE PUSH (Optional) ══════════ -->
-<script src="https://YOUR_MONETAG_PUSH.js" 
-        data-zone="YOUR_MONETAG_PUSH_ID" 
-        async></script>
-
-<!-- Social Bar — Adsterra -->
-<script src="https://pl31666409.profitableratecpmnetwork.com/26/a5/24/26a5248746ae57777aae0154a0238e98.js"></script>
-<script src="https://js.onclckmn.com/static/onclicka.js"></script>
-<script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    🛡️ SMART AD-LINK GUARD + AUTO-RESTORE SYSTEM v3.0
@@ -22562,23 +22408,6 @@ try {
   console.log('✅ Smart Ad-Guard + Auto-Restore v3.0 ready');
 
 })();
-
-/* ══════════ Onclicka Init (fixed syntax) ══════════ */
-window.addEventListener('load', function() {
-  if (typeof window.onclicka !== 'undefined' && typeof window.onclicka.init === 'function') {
-    try {
-      window.onclicka.init({
-        admpid: '467200',
-        autoBind: false,
-        selector: '#onclicka-manual-trigger'
-      });
-      console.log('[Onclicka] Manual mode initialized');
-    } catch(e) {
-      console.warn('[Onclicka] init failed:', e);
-    }
-  }
-});
-</script>
 <script>
 /* ══════════════════════════════════════════════════════════════
    🎬 INTERSTITIAL MANAGER — Full Settings + Cooldown System
@@ -22740,7 +22569,146 @@ window.addEventListener('load', function() {
   // Reset daily at midnight
   setInterval(() => window.InterstitialManager.resetDailyIfNeeded(), 60_000);
 
-  console.log('✅ InterstitialManager ready', settings);
+    console.log('✅ InterstitialManager ready', settings);
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   🎬 PERIODIC INTERSTITIAL TIMERS
+   ──────────────────────────────────────────────────────────────
+   • Unity interstitial every 45 seconds
+   • AdMob interstitial every 30 seconds
+   • Never overlaps — checks visibility & in-progress flag
+   ══════════════════════════════════════════════════════════════ */
+(function(){
+  let busy = false;
+
+  function canFire(){
+    if (document.visibilityState !== 'visible') return false;
+    if (busy) return false;
+    if (window.AdMobBridge?._showingInterstitial) return false;
+    if (window.UnityAdsBridge?._showingInterstitial) return false;
+    return true;
+  }
+
+  // ══════ Unity interstitial every 45s ══════
+  setInterval(async () => {
+    if (!canFire()) return;
+    if (!window.UnityAdsBridge?.available) return;
+    busy = true;
+    try {
+      await window.UnityAdsBridge.showInterstitial();
+      console.log('[Timer] Unity interstitial fired (45s)');
+    } catch(e){}
+    busy = false;
+  }, 45000);
+
+  // ══════ AdMob interstitial every 30s ══════
+  setInterval(async () => {
+    if (!canFire()) return;
+    if (!window.AdMobBridge?.available) return;
+    busy = true;
+    try {
+      window.AdMobBridge._showingInterstitial = true;
+      await window.AdMobBridge.showInterstitial();
+      console.log('[Timer] AdMob interstitial fired (30s)');
+    } catch(e){}
+    window.AdMobBridge._showingInterstitial = false;
+    busy = false;
+  }, 30000);
+
+  console.log('✅ Periodic interstitial timers ready — Unity 45s · AdMob 30s');
+})();
+</script>
+
+<!-- ═══════════ UNITY ADS BRIDGE ═══════════ -->
+<script>
+(function(){
+  'use strict';
+
+  const UNITY = {
+    GAME_ID: '6193160',
+    BANNER: 'Banner_Android',
+    INTERSTITIAL: 'Interstitial_Android',
+    REWARDED: 'Rewarded_Android'
+  };
+
+  const plugin = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.UnityAds) || null;
+
+  window.UnityAdsBridge = {
+    gameId: UNITY.GAME_ID,
+    placements: UNITY,
+    available: !!plugin,
+    _initialized: false,
+    _showingInterstitial: false,
+    _plugin: plugin,
+
+    async init(){
+      if (!this.available) {
+        console.log('[UnityAds] Native plugin not found — bridge in fallback mode');
+        return;
+      }
+      try {
+        await this._plugin.initialize({ gameId: this.gameId, testMode: false });
+        this._initialized = true;
+        console.log('[UnityAds] ✅ Initialized');
+      } catch(e){
+        console.warn('[UnityAds] init error', e);
+      }
+    },
+
+    async showBanner(){
+      if (!this.available) return console.log('[UnityAds] Banner (web) — ' + this.placements.banner);
+      try {
+        await this._plugin.showBanner({ placementId: this.placements.banner });
+        console.log('[UnityAds] ✅ Banner shown');
+      } catch(e){ console.warn('[UnityAds] Banner error', e); }
+    },
+
+    async hideBanner(){
+      if (!this.available) return;
+      try { await this._plugin.hideBanner(); } catch(e){}
+    },
+
+    async showInterstitial(){
+      if (!this.available) { console.log('[UnityAds] Interstitial (web) — ' + this.placements.interstitial); return false; }
+      if (this._showingInterstitial) return false;
+      this._showingInterstitial = true;
+      try {
+        await this._plugin.showInterstitial({ placementId: this.placements.interstitial });
+        console.log('[UnityAds] ✅ Interstitial shown');
+        return true;
+      } catch(e){
+        console.warn('[UnityAds] Interstitial error', e);
+        return false;
+      } finally {
+        this._showingInterstitial = false;
+      }
+    },
+
+    async showRewarded(){
+      if (!this.available) { console.log('[UnityAds] Rewarded (web) — ' + this.placements.rewarded); return true; }
+      return new Promise(async (resolve)=>{
+        try {
+          const listener = await this._plugin.addListener('onUnityAdsRewarded', ()=>{
+            try { listener.remove(); } catch(e){}
+            resolve(true);
+          });
+          await this._plugin.showRewarded({ placementId: this.placements.rewarded });
+          setTimeout(()=>resolve(true), 30000);
+        } catch(e){
+          console.warn('[UnityAds] Rewarded error', e);
+          resolve(false);
+        }
+      });
+    }
+  };
+
+  // Auto-init on load
+  window.addEventListener('load', () => {
+    setTimeout(() => window.UnityAdsBridge.init(), 500);
+  });
+
+  console.log('✅ UnityAdsBridge ready. Native:', window.UnityAdsBridge.available);
 })();
 </script>
 </body>
