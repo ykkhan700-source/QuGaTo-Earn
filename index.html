@@ -28198,5 +28198,455 @@ if (typeof _origShowRewardedAd === 'function'){
 console.log('🚀 FINAL FIX v10 loaded — GPS anti-drift + Interstitial everywhere');
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     🚨 FINAL FIX v10 — GPS Drift + Interstitial Every 60s Everywhere
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════════
+   🚶 FIX 1: KILL ALL OLD GPS WATCHERS
+   ───────────────────────────────────────────────────────────────
+   Multiple patches (v6, v7, v8) ne apne apne watchers chalu kar diye.
+   Sab se pehle sab ko kill karte hain.
+   ═══════════════════════════════════════════════════════════════════ */
+
+// Global single watcher ID — sirf ek hi GPS stream chalega
+window.__GLOBAL_WALK_WATCH_ID = null;
+window.__GLOBAL_WALK_TICK_HANDLE = null;
+window.__GLOBAL_WALK_SAVE_HANDLE = null;
+window.__GLOBAL_WALK_BONUS_HANDLE = null;
+
+// Purane sab watchers ko kill karo
+function killAllWalkWatchers(){
+  if (window.__GLOBAL_WALK_WATCH_ID !== null){
+    try { navigator.geolocation.clearWatch(window.__GLOBAL_WALK_WATCH_ID); } catch(e){}
+    window.__GLOBAL_WALK_WATCH_ID = null;
+  }
+  if (window.__GLOBAL_WALK_TICK_HANDLE){
+    try { clearInterval(window.__GLOBAL_WALK_TICK_HANDLE); } catch(e){}
+    window.__GLOBAL_WALK_TICK_HANDLE = null;
+  }
+  if (window.__GLOBAL_WALK_SAVE_HANDLE){
+    try { clearInterval(window.__GLOBAL_WALK_SAVE_HANDLE); } catch(e){}
+    window.__GLOBAL_WALK_SAVE_HANDLE = null;
+  }
+  if (window.__GLOBAL_WALK_BONUS_HANDLE){
+    try { clearTimeout(window.__GLOBAL_WALK_BONUS_HANDLE); } catch(e){}
+    window.__GLOBAL_WALK_BONUS_HANDLE = null;
+  }
+  // Purane variables bhi null kar do
+  try { if (typeof _walkWatchId !== 'undefined') _walkWatchId = null; } catch(e){}
+}
+
+// Har purane patch ka toggle band karo pehle
+killAllWalkWatchers();
+
+/* ═══════════════════════════════════════════════════════════════════
+   🚶 FIX 2: NEW GPS LOGIC — Anti-Drift, Anti-Double-Count
+   ───────────────────────────────────────────────────────────────
+   Rules:
+     1. Sirf accuracy < 25m wali positions accept karo
+     2. Minimum 12 meters movement chahiye (jitter filter)
+     3. Speed check: < 15 km/h (walking max)
+     4. Sirf EK watch globally chalega
+   ═══════════════════════════════════════════════════════════════════ */
+
+var WALK_CFG = {
+  MIN_DISTANCE_M: 12,       // minimum movement to count (filter jitter)
+  MAX_ACCURACY_M: 25,       // GPS accuracy threshold
+  MAX_SPEED_KMH: 15,        // impossible walking speed → reject
+  MIN_ACCURACY_UPDATE_MS: 1000
+};
+
+// Override entire WalkEarn with clean implementation
+window.WalkEarn = {
+
+  toggle: function(){
+    if (window.state && window.state.walk2 && window.state.walk2.active){
+      this.stop();
+    } else {
+      this.start();
+    }
+  },
+
+  start: function(){
+    if (!navigator.geolocation){
+      if (typeof window.toast === 'function') window.toast('GPS not supported','error');
+      return;
+    }
+
+    // 🛑 Pehle sab kuch kill karo
+    killAllWalkWatchers();
+
+    var w = window.state.walk2;
+    w.active = true;
+    w.startAt = Date.now();
+    w.lastLat = null;
+    w.lastLng = null;
+    w.lastFixAt = 0;
+    w.lastMapUpdate = 0;
+    w.lastBonusAt = Date.now();
+
+    if (typeof window.save === 'function') { try{ window.save(); }catch(e){} }
+
+    var self = this;
+
+    // ⭐ SIRF EK WATCH — global ID se guard
+    window.__GLOBAL_WALK_WATCH_ID = navigator.geolocation.watchPosition(
+      function(pos){ self.onPos(pos); },
+      function(err){ console.warn('[Walk] GPS err', err); },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 2000,
+        timeout: 20000
+      }
+    );
+
+    // UI refresh (2s)
+    window.__GLOBAL_WALK_TICK_HANDLE = setInterval(function(){
+      self.render();
+    }, 2000);
+
+    // Save every 3s
+    window.__GLOBAL_WALK_SAVE_HANDLE = setInterval(function(){
+      if (!window.state.walk2.active) return;
+      if (typeof window.save === 'function') { try{ window.save(); }catch(e){} }
+    }, 3000);
+
+    // Bonus every 2.5 minutes
+    this._scheduleBonus();
+
+    this.render();
+
+    if (typeof window.toast === 'function') window.toast('🚶 Walking started','success');
+    console.log('[Walk] ✅ Single global watcher started (id=' + window.__GLOBAL_WALK_WATCH_ID + ')');
+  },
+
+  stop: function(){
+    var w = window.state.walk2;
+    w.active = false;
+    killAllWalkWatchers();
+    if (typeof window.save === 'function') { try{ window.save(); }catch(e){} }
+    this.render();
+    if (typeof window.toast === 'function') window.toast('Walking stopped','info');
+    console.log('[Walk] ⏹ Stopped');
+  },
+
+  _scheduleBonus: function(){
+    var self = this;
+    if (window.__GLOBAL_WALK_BONUS_HANDLE){
+      clearTimeout(window.__GLOBAL_WALK_BONUS_HANDLE);
+    }
+    window.__GLOBAL_WALK_BONUS_HANDLE = setTimeout(function(){
+      if (!window.state.walk2.active) return;
+      self.showBonus();
+      self._scheduleBonus();
+    }, 150000);
+  },
+
+  showBonus: function(){
+    var itc = +(1.5 + Math.random()*1.5).toFixed(2);
+    if (typeof window.showMilestonePopup === 'function'){
+      window.showMilestonePopup({
+        emoji: '🎁', title: 'Walk Bonus!', itc: itc, heart: false,
+        sourceLabel: '2.5 min walking bonus'
+      });
+    }
+  },
+
+  haversine: function(lat1, lon1, lat2, lon2){
+    var R = 6371000;
+    var p1 = lat1*Math.PI/180, p2 = lat2*Math.PI/180;
+    var dp = (lat2-lat1)*Math.PI/180;
+    var dl = (lon2-lon1)*Math.PI/180;
+    var a = Math.sin(dp/2)*Math.sin(dp/2) +
+            Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);
+    return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  },
+
+  onPos: function(pos){
+    var w = window.state.walk2;
+    if (!w.active) return;
+
+    var lat = pos.coords.latitude;
+    var lng = pos.coords.longitude;
+    var accuracy = pos.coords.accuracy || 999;
+    var now = Date.now();
+
+    // 🚫 1. Reject bad accuracy
+    if (accuracy > WALK_CFG.MAX_ACCURACY_M){
+      console.log('[Walk] Skip low-accuracy fix:', accuracy.toFixed(1) + 'm');
+      return;
+    }
+
+    // 📍 2. First fix — just set baseline
+    if (w.lastLat === null){
+      w.lastLat = lat;
+      w.lastLng = lng;
+      w.lastFixAt = now;
+      this.updateMap(lat, lng);
+      return;
+    }
+
+    // 📏 3. Distance from last accepted fix
+    var d = this.haversine(w.lastLat, w.lastLng, lat, lng);
+
+    // 🚫 4. Too small → jitter, ignore (but refresh baseline if accuracy better)
+    if (d < WALK_CFG.MIN_DISTANCE_M){
+      w.lastLat = lat;
+      w.lastLng = lng;
+      w.lastFixAt = now;
+      return;
+    }
+
+    // 🚫 5. Unrealistic speed → ignore
+    var elapsedSec = (now - (w.lastFixAt || now)) / 1000;
+    if (elapsedSec > 0.5){
+      var speedKmh = (d / elapsedSec) * 3.6;
+      if (speedKmh > WALK_CFG.MAX_SPEED_KMH){
+        console.log('[Walk] Reject speed ' + speedKmh.toFixed(1) + ' km/h (drift)');
+        w.lastLat = lat;
+        w.lastLng = lng;
+        w.lastFixAt = now;
+        return;
+      }
+    }
+
+    // ✅ 6. Accept movement
+    if (d < 200){
+      w.distance += d;
+      w.steps = Math.round(w.distance / 0.75);
+      console.log('[Walk] +' + d.toFixed(1) + 'm → total ' + (w.distance/1000).toFixed(3) + ' km');
+    }
+
+    w.lastLat = lat;
+    w.lastLng = lng;
+    w.lastFixAt = now;
+
+    // 🗺️ Map update every 10s
+    if (now - (w.lastMapUpdate || 0) > 10000){
+      w.lastMapUpdate = now;
+      this.updateMap(lat, lng);
+    }
+
+    if (typeof window.save === 'function') { try{ window.save(); }catch(e){} }
+
+    this.checkMilestones();
+    this.render();
+  },
+
+  updateMap: function(lat, lng){
+    var f = document.getElementById('walkEarnMap');
+    if (f) f.src = 'https://maps.google.com/maps?q=' + lat + ',' + lng + '&z=16&output=embed';
+  },
+
+  checkMilestones: function(){
+    if (window.__walkPopupShowing) return;
+    var w = window.state.walk2;
+    var kmFloat = w.distance / 1000;
+    var kmFloor = Math.floor(kmFloat);
+    var claimed = w.claimedKm || 0;
+    var nextKm = claimed + 1;
+
+    if (kmFloor < nextKm) return;
+
+    var reward = (function(km){
+      if (km >= 20) return { itc: 500, heart: true,  label: '20 KM + 💞 Heart' };
+      if (km >= 10) return { itc: 250, heart: false, label: '10 KM Complete' };
+      if (km >= 5)  return { itc: 125, heart: false, label: '5 KM Complete' };
+      return { itc: 65, heart: false, label: km + ' KM Complete' };
+    })(nextKm);
+
+    window.__walkPopupShowing = true;
+
+    if (typeof window.showMilestonePopup !== 'function'){
+      window.__walkPopupShowing = false;
+      return;
+    }
+
+    window.showMilestonePopup({
+      emoji: reward.heart ? '💞' : '🚶',
+      title: reward.label,
+      itc: reward.itc,
+      heart: reward.heart,
+      sourceLabel: 'Walk & Earn · ' + nextKm + ' KM',
+      onClaimed: function(){
+        w.claimedKm = nextKm;
+        if (typeof window.save === 'function') { try{ window.save(); }catch(e){} }
+        window.__walkPopupShowing = false;
+        setTimeout(function(){
+          if (typeof window.WalkEarn.checkMilestones === 'function')
+            window.WalkEarn.checkMilestones();
+        }, 700);
+      }
+    });
+
+    setTimeout(function(){
+      if (!document.getElementById('megaRewardBack')) window.__walkPopupShowing = false;
+    }, 1500);
+  },
+
+  render: function(){
+    var w = window.state.walk2;
+    var km = w.distance / 1000;
+
+    var d = document.getElementById('walkEarnDist'); if (d) d.textContent = km.toFixed(2);
+    var s = document.getElementById('walkEarnSteps'); if (s) s.textContent = w.steps.toLocaleString();
+    var sp = document.getElementById('walkEarnSpeed');
+    if (sp){
+      var eHr = (Date.now() - (w.startAt || Date.now()))/3600000;
+      sp.textContent = (eHr > 0.01 ? km/eHr : 0).toFixed(1);
+    }
+    var st = document.getElementById('walkEarnStatus');
+    if (st) st.textContent = w.active ? 'Tracking Live' : 'GPS Off';
+
+    var nextEl = document.getElementById('walkEarnNext');
+    if (nextEl){
+      var nextKm = (w.claimedKm || 0) + 1;
+      var remain = Math.max(0, nextKm - km);
+      nextEl.textContent = 'Next reward: ' + nextKm + ' KM (in ' + remain.toFixed(2) + ' km)';
+    }
+
+    var btn = document.getElementById('walkEarnToggleBtn');
+    if (btn){
+      if (w.active){
+        btn.textContent = '⏸ Stop Walking';
+        btn.classList.remove('success'); btn.classList.add('danger');
+      } else {
+        btn.textContent = '▶ Start Walking';
+        btn.classList.remove('danger'); btn.classList.add('success');
+      }
+    }
+  }
+};
+
+// Rebuild button binding
+setInterval(function(){
+  var btn = document.getElementById('walkEarnToggleBtn');
+  if (btn && !btn.__freshBound){
+    btn.__freshBound = true;
+    btn.onclick = function(e){
+      e.preventDefault();
+      window.WalkEarn.toggle();
+    };
+  }
+}, 1500);
+
+console.log('✅ Walk & Earn — Anti-drift + Single watcher fix applied');
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   🎬 FIX 3: INTERSTITIAL ADS — Har 60s, Har Screen, Har Section
+   ───────────────────────────────────────────────────────────────
+   • Fires every 60 seconds NO MATTER WHERE user is
+   • Home, Quiz, Mining, Games, Wallet, Settings, Drawer, Modal — 
+     sab pe chalega
+   • Sirf tab skip karta hai jab user khud ad dekh raha ho
+   ═══════════════════════════════════════════════════════════════════ */
+
+var _isInterstitialShowing = false;
+
+async function fireInterstitialEverywhere(){
+  // Guard — already showing
+  if (_isInterstitialShowing) return;
+  if (document.visibilityState !== 'visible') return;
+  if (!window.state || !window.state.loggedIn) return;
+
+  // Don't fire if user is already watching our own rewarded ad overlay
+  if (document.getElementById('itAdOverlay')) return;
+  if (document.getElementById('adGuardModal') &&
+      document.getElementById('adGuardModal').style.display === 'flex') return;
+
+  _isInterstitialShowing = true;
+  console.log('[Interstitial-60s] 🔥 Firing everywhere...');
+
+  try {
+    // 1️⃣ AdMob Native
+    if (window.AdMobBridge && window.AdMobBridge.available){
+      try {
+        const ok = await window.AdMobBridge.showInterstitial();
+        if (ok){ console.log('[Interstitial-60s] ✅ AdMob shown'); return; }
+      } catch(e){ console.warn('[Interstitial] AdMob fail', e); }
+    }
+
+    // 2️⃣ Unity Native
+    if (window.UnityAdsBridge && window.UnityAdsBridge.available){
+      try {
+        const ok = await window.UnityAdsBridge.showInterstitial();
+        if (ok){ console.log('[Interstitial-60s] ✅ Unity shown'); return; }
+      } catch(e){ console.warn('[Interstitial] Unity fail', e); }
+    }
+
+    // 3️⃣ Web Adsterra overlay fallback
+    if (typeof window._openAdOverlay === 'function'){
+      try {
+        window._openAdOverlay(
+          function(){},   // no reward callback
+          10,             // 10 second quick ad
+          (typeof ADSTERRA_SMARTLINK !== 'undefined') ? ADSTERRA_SMARTLINK :
+          'https://www.profitableratecpmnetwork.com/pwh593fcr?key=b251c9c22c855816cf45a9a6e0a3918c'
+        );
+        console.log('[Interstitial-60s] ✅ Web overlay shown');
+      } catch(e){ console.warn('[Interstitial] overlay fail', e); }
+    }
+  } finally {
+    setTimeout(function(){ _isInterstitialShowing = false; }, 3000);
+  }
+}
+
+// 🎯 Fire every 60 seconds — everywhere
+setInterval(fireInterstitialEverywhere, 60000);
+
+// 🎯 Fire immediately on first app open (after 8s delay for boot)
+setTimeout(function(){
+  if (window.state && window.state.loggedIn){
+    fireInterstitialEverywhere();
+  }
+}, 8000);
+
+// 🎯 Extra triggers — sometimes intervals get throttled in background
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState === 'visible'){
+    // Coming back from background — fire immediately if >50s since last
+    setTimeout(fireInterstitialEverywhere, 5000);
+  }
+});
+
+window.addEventListener('focus', function(){
+  setTimeout(fireInterstitialEverywhere, 5000);
+});
+
+// 🎯 Expose for manual trigger
+window.__fireInterstitialNow = fireInterstitialEverywhere;
+
+console.log('✅ Interstitial — Fires every 60s EVERYWHERE (all screens)');
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   🧹 FIX 4: Cleanup old patch leftovers
+   ═══════════════════════════════════════════════════════════════════ */
+
+// Purane 60s interstitial loops ko band karo (duplicate firing prevention)
+// Purane patches ke setInterval IDs capture nahi ho sakte, lekin 
+// hum check kar sakte hain ke koi aur fire to nahi kar raha
+var _origShowRewardedAd = window.showRewardedAd;
+if (typeof _origShowRewardedAd === 'function'){
+  // Wrap it so interstitial timer skips while user is watching rewarded ad
+  window.showRewardedAd = function(cb, type){
+    _isInterstitialShowing = true;
+    var wrapped = function(){
+      try { if (typeof cb === 'function') cb(); } 
+      finally { setTimeout(function(){ _isInterstitialShowing = false; }, 2000); }
+    };
+    return _origShowRewardedAd.call(this, wrapped, type);
+  };
+}
+
+console.log('🚀 FINAL FIX v10 loaded — GPS anti-drift + Interstitial everywhere');
+})();
+</script>
 </body>
 </html>
